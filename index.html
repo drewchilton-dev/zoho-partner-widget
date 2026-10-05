@@ -39,10 +39,15 @@
     <iframe id="analyticsDashboard" src="about:blank"></iframe>
 
     <script>
-        ZOHO.embeddedApp.on("PageLoad", function(data) {
-            ZOHO.CRM.CONFIG.getCurrentUser().then(function(response) {
-                var debugBar = document.getElementById("debugBar");
+        var hasLoaded = false;
 
+        function runWidget() {
+            if (hasLoaded) return;
+            hasLoaded = true;
+
+            var debugBar = document.getElementById("debugBar");
+
+            ZOHO.CRM.CONFIG.getCurrentUser().then(function(response) {
                 if (!response || !response.users || response.users.length === 0) {
                     debugBar.innerHTML = "<strong style='color:red;'>Error:</strong> Could not retrieve CRM user profile.";
                     return;
@@ -50,7 +55,6 @@
 
                 var user = response.users[0];
                 
-                // Safely format First + Last Name without 'null' or 'undefined'
                 var firstName = (user.first_name && user.first_name !== "null") ? user.first_name.trim() : "";
                 var lastName = (user.last_name && user.last_name !== "null") ? user.last_name.trim() : "";
                 var ownerName = (firstName + " " + lastName).trim();
@@ -59,27 +63,31 @@
                     ownerName = user.full_name.trim();
                 }
 
-                // Base Embed Link
-                var baseUrl = "https://analytics.zoho.com/open-view/1095920000073048250/3691e1aceebe36fe8f0e44429d1921e24d3f378971f3ee8ecd20653043885176";[cite: 9]
+                var baseUrl = "https://analytics.zoho.com/open-view/1095920000073048250/3691e1aceebe36fe8f0e44429d1921e24d3f378971f3ee8ecd20653043885176";
+                var queryTableName = "Accounts with Parent Account Name Query";
+                var ownerColumnName = "a.Account Owner Name";
 
-                // SQL Table and Column Names
-                var queryTableName = "Accounts with Parent Account Name Query";[cite: 7]
-                var ownerColumnName = "a.Account Owner Name";[cite: 7, 9]
-
-                // Construct Criteria
                 var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
-                // Print status banner above iframe
                 debugBar.innerHTML = "<strong>User Detected:</strong> " + ownerName + 
-                                     " | <a href='" + fullUrl + "' target='_blank'>Open Generated Link in New Tab</a>";
+                                     " | <a href='" + fullUrl + "' target='_blank'>Open Link in New Tab</a>";
 
-                // Load iframe
                 document.getElementById("analyticsDashboard").src = fullUrl;
+            }).catch(function(err) {
+                debugBar.innerHTML = "<strong style='color:red;'>CRM SDK Error:</strong> " + JSON.stringify(err);
             });
+        }
+
+        // Trigger on PageLoad event (if available)
+        ZOHO.embeddedApp.on("PageLoad", function(data) {
+            runWidget();
         });
 
-        ZOHO.embeddedApp.init();
+        // Trigger directly on SDK init completion (required for Home Screen / Canvas views)
+        ZOHO.embeddedApp.init().then(function() {
+            runWidget();
+        });
     </script>
 </body>
 </html>
