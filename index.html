@@ -39,7 +39,6 @@
     <iframe id="analyticsDashboard" src="about:blank"></iframe>
 
     <script>
-        // Print any global JS execution errors to screen
         window.onerror = function(msg, url, line) {
             var debugBar = document.getElementById("debugBar");
             if (debugBar) {
@@ -71,9 +70,9 @@
                     ownerName = user.full_name.trim();
                 }
 
-                var baseUrl = "https://analytics.zoho.com/open-view/1095920000073048250/3691e1aceebe36fe8f0e44429d1921e24d3f378971f3ee8ecd20653043885176";[cite: 9]
-                var queryTableName = "Accounts with Parent Account Name Query";[cite: 7]
-                var ownerColumnName = "a.Account Owner Name";[cite: 7, 9]
+                var baseUrl = "https://analytics.zoho.com/open-view/1095920000073048250/3691e1aceebe36fe8f0e44429d1921e24d3f378971f3ee8ecd20653043885176";
+                var queryTableName = "Accounts with Parent Account Name Query";
+                var ownerColumnName = "a.Account Owner Name";
 
                 var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
@@ -87,15 +86,12 @@
             });
         }
 
-        // 1. Listen for standard PageLoad event
         ZOHO.embeddedApp.on("PageLoad", function(data) {
             runWidget();
         });
 
-        // 2. Initialize SDK synchronously
         ZOHO.embeddedApp.init();
 
-        // 3. Fallback trigger after initialization (required for Home Screen Canvas views)
         setTimeout(function() {
             runWidget();
         }, 1000);
