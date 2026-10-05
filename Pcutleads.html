@@ -60,10 +60,13 @@
                 var user = response.users[0];
                 var firstName = (user.first_name && user.first_name !== "null") ? user.first_name.trim() : "";
                 var lastName = (user.last_name && user.last_name !== "null") ? user.last_name.trim() : "";
-                var ownerName = (firstName + " " + lastName).trim() || user.full_name.trim();
+                var rawOwnerName = (firstName + " " + lastName).trim() || (user.full_name ? user.full_name.trim() : "");
 
-                // Override Drew Chilton to Chris McPheeters
-                if (ownerName === "Drew Chilton") {
+                var ownerName = rawOwnerName;
+
+                // Flexible override check for Drew Chilton (handles extra spaces, middle names, or casing)
+                var lower = rawOwnerName.toLowerCase();
+                if (lower.indexOf("drew") !== -1 || lower.indexOf("chilton") !== -1) {
                     ownerName = "Chris McPheeters";
                 }
 
