@@ -62,17 +62,19 @@
                 var lastName = (user.last_name && user.last_name !== "null") ? user.last_name.trim() : "";
                 var ownerName = (firstName + " " + lastName).trim() || user.full_name.trim();
 
-                // New Dashboard Embed URL
-                var baseUrl = "https://analytics.zoho.com/open-view/1095920000070034646/b751cd19260c07522a6779b2b8b118db37c21a122ea1ea424d9eb0a93df6019e";
+                // Override Drew Chilton to Chris McPheeters
+                if (ownerName === "Drew Chilton") {
+                    ownerName = "Chris McPheeters";
+                }
 
-                // Matching Query Table & Column details
+                var baseUrl = "https://analytics.zoho.com/open-view/1095920000070034646/b751cd19260c07522a6779b2b8b118db37c21a122ea1ea424d9eb0a93df6019e";
                 var queryTableName = "Accounts with Parent Account Name Query";
                 var ownerColumnName = "a.Account Owner Name";
 
                 var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
-                debugBar.innerHTML = "<strong>User Detected:</strong> " + ownerName + 
+                debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName + 
                                      " | <a href='" + fullUrl + "' target='_blank'>Open Link in New Tab</a>";
 
                 document.getElementById("analyticsDashboard").src = fullUrl;
