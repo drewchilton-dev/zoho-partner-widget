@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <script src="https://live.zwidgets.com/js-sdk/1.3/ZohoEmbededAppSDK.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+        #debugBar {
+            background-color: #f4f6f9;
+            border-bottom: 1px solid #dcdcdc;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #333;
+            word-break: break-all;
+        }
+        #debugBar a {
+            color: #0275d8;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        iframe {
+            width: 100%;
+            height: calc(100vh - 35px);
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="debugBar">Initializing Zoho CRM Session...</div>
+    <iframe id="analyticsDashboard" src="about:blank"></iframe>
+
+    <script>
+        var hasLoaded = false;
+
+        function runWidget() {
+            if (hasLoaded) return;
+            hasLoaded = true;
+
+            var debugBar = document.getElementById("debugBar");
+
+            if (window.self === window.top) {
+                debugBar.innerHTML = "<strong>Notice:</strong> Standalone tab detected. Please view inside Zoho CRM.";
+                return;
+            }
+
+            ZOHO.CRM.CONFIG.getCurrentUser().then(function(response) {
+                if (!response || !response.users || response.users.length === 0) {
+                    debugBar.innerHTML = "<strong style='color:red;'>Error:</strong> Could not retrieve CRM user profile.";
+                    return;
+                }
+
+                var user = response.users[0];
+                var firstName = (user.first_name && user.first_name !== "null") ? user.first_name.trim() : "";
+                var lastName = (user.last_name && user.last_name !== "null") ? user.last_name.trim() : "";
+                var ownerName = (firstName + " " + lastName).trim() || user.full_name.trim();
+
+                // Dashboard Embed URL
+                var baseUrl = "https://analytics.zoho.com/open-view/1095920000033265160/68aa4c9fc921d0af5d985a231fcb06d5";
+
+                // Potentials Module Filter Target
+                var queryTableName = "Potentials";
+                var ownerColumnName = "Potential Owner Name";
+
+                var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
+                var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
+
+                debugBar.innerHTML = "<strong>User Detected:</strong> " + ownerName + 
+                                     " | <a href='" + fullUrl + "' target='_blank'>Open Link in New Tab</a>";
+
+                document.getElementById("analyticsDashboard").src = fullUrl;
+            }).catch(function(err) {
+                debugBar.innerHTML = "<strong style='color:red;'>CRM SDK Error:</strong> " + JSON.stringify(err);
+            });
+        }
+
+        ZOHO.embeddedApp.on("PageLoad", function(data) {
+            runWidget();
+        });
+
+        ZOHO.embeddedApp.init();
+
+        setTimeout(function() {
+            runWidget();
+        }, 1000);
+    </script>
+</body>
+</html>
