@@ -64,14 +64,31 @@
 
                 // Override Drew Chilton to Chris McPheeters
                 if (ownerName === "Drew Chilton") {
-                    ownerName = "Chris McPheeters";
+                    ownerName = "Rich OBoyle";
                 }
 
+                // --- CONFIGURATION ---
                 var baseUrl = "https://analytics.zoho.com/open-view/1095920000073048250/3691e1aceebe36fe8f0e44429d1921e24d3f378971f3ee8ecd20653043885176";
                 var queryTableName = "Accounts with Parent Account Name Query";
                 var ownerColumnName = "a.Account Owner Name";
+                var regionColumnName = "a.Region Group";
 
-                var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
+                var rawCriteria = "";
+
+                // --- MANAGER / REGIONAL OVERRIDES ---
+                if (ownerName === "Meghan Acciavatti") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '"=\'East\')';
+                } 
+                else if (ownerName === "Rich O\'Boyle" || ownerName === "Rich OBoyle") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '"=\'West\')';
+                } 
+                else if (ownerName === "Gordon Myers") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '" IN (\'Latam\', \'Canada\'))';
+                } 
+                else {
+                    rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
+                }
+
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
                 debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName + 
