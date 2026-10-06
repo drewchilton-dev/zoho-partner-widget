@@ -1,42 +1,165 @@
-function sendChatMessage() {
-    var inputEl = document.getElementById("userMessage");
-    var btnEl = document.getElementById("sendBtn");
-    var messageText = inputEl.value.trim();
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <script src="https://live.zwidgets.com/js-sdk/1.3/ZohoEmbededAppSDK.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: transparent;
+        }
+        .container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+            padding: 4px;
+        }
+        .start-btn {
+            width: 100%;
+            height: 36px;
+            background-color: #0275d8;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+        .start-btn:hover {
+            background-color: #025aa5;
+        }
+        .chat-bar {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            height: 36px;
+        }
+        input[type="text"] {
+            flex: 1;
+            height: 36px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 0 10px;
+            font-size: 13px;
+            outline: none;
+            background: #ffffff;
+        }
+        input[type="text"]:focus {
+            border-color: #0275d8;
+        }
+        .send-btn {
+            height: 36px;
+            background-color: #0275d8;
+            color: #ffffff;
+            border: none;
+            padding: 0 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .send-btn:hover {
+            background-color: #025aa5;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #64748b;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+    </style>
+</head>
+<body>
 
-    if (!messageText) return;
+    <div class="container">
+        <button id="initialBtn" class="start-btn" onclick="showChatInput()">Chat Operations</button>
 
-    var name = currentUser ? (currentUser.full_name || currentUser.first_name) : "CRM User";
-    var email = currentUser ? currentUser.email : "Unknown Email";
+        <div id="chatBar" class="chat-bar">
+            <input type="text" id="userMessage" placeholder="Chat Operations..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button id="sendBtn" class="send-btn" onclick="sendChatMessage()">Send</button>
+            <button class="close-btn" onclick="hideChatInput()" title="Cancel">✕</button>
+        </div>
+    </div>
 
-    inputEl.disabled = true;
-    btnEl.disabled = true;
-    inputEl.value = "";
-    inputEl.placeholder = "Sending...";
+    <script>
+        var currentUser = null;
 
-    // Format required by Zoho CRM JS SDK
-    var funcData = {
-        arguments: JSON.stringify({
-            "user_name": name,
-            "user_email": email,
-            "user_message": messageText
-        })
-    };
+        ZOHO.embeddedApp.on("PageLoad", function() {
+            ZOHO.CRM.CONFIG.getCurrentUser().then(function(response) {
+                if (response && response.users && response.users.length > 0) {
+                    currentUser = response.users[0];
+                }
+            });
+        });
 
-    ZOHO.CRM.FUNCTIONS.execute("send_home_page_chat", funcData).then(function(data) {
-        inputEl.placeholder = "Sent to Operations! ✓";
-        setTimeout(function() {
-            inputEl.placeholder = "Chat Operations...";
-            inputEl.disabled = false;
-            btnEl.disabled = false;
-            hideChatInput();
-        }, 2000);
-    }).catch(function(err) {
-        console.error("Zoho function execution error:", err);
-        inputEl.placeholder = "Error sending!";
-        setTimeout(function() {
-            inputEl.placeholder = "Chat Operations...";
-            inputEl.disabled = false;
-            btnEl.disabled = false;
-        }, 2000);
-    });
-}
+        ZOHO.embeddedApp.init();
+
+        function showChatInput() {
+            document.getElementById("initialBtn").style.display = "none";
+            document.getElementById("chatBar").style.display = "flex";
+            document.getElementById("userMessage").focus();
+        }
+
+        function hideChatInput() {
+            document.getElementById("chatBar").style.display = "none";
+            document.getElementById("initialBtn").style.display = "flex";
+        }
+
+        function sendChatMessage() {
+            var inputEl = document.getElementById("userMessage");
+            var btnEl = document.getElementById("sendBtn");
+            var messageText = inputEl.value.trim();
+
+            if (!messageText) return;
+
+            var name = currentUser ? (currentUser.full_name || currentUser.first_name) : "CRM User";
+            var email = currentUser ? currentUser.email : "Unknown Email";
+
+            inputEl.disabled = true;
+            btnEl.disabled = true;
+            inputEl.value = "";
+            inputEl.placeholder = "Sending...";
+
+            var funcData = {
+                arguments: JSON.stringify({
+                    "user_name": name,
+                    "user_email": email,
+                    "user_message": messageText
+                })
+            };
+
+            ZOHO.CRM.FUNCTIONS.execute("OperationsChatBot", funcData).then(function(data) {
+                inputEl.placeholder = "Sent to Operations! ✓";
+                setTimeout(function() {
+                    inputEl.placeholder = "Chat Operations...";
+                    inputEl.disabled = false;
+                    btnEl.disabled = false;
+                    hideChatInput();
+                }, 2000);
+            }).catch(function(err) {
+                console.error("Execution Error:", err);
+                inputEl.placeholder = "Error sending!";
+                setTimeout(function() {
+                    inputEl.placeholder = "Chat Operations...";
+                    inputEl.disabled = false;
+                    btnEl.disabled = false;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
