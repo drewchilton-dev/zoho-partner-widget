@@ -4,103 +4,59 @@
     <meta charset="UTF-8">
     <script src="https://live.zwidgets.com/js-sdk/1.3/ZohoEmbededAppSDK.min.js"></script>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
             width: 100%;
+            height: 100%;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             background: transparent;
         }
-        /* Header Trigger Button */
-        .chat-trigger-btn {
-            background-color: #0275d8;
-            color: #ffffff;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
+        .chat-bar {
             display: flex;
             align-items: center;
             gap: 6px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: background 0.2s;
-        }
-        .chat-trigger-btn:hover { background-color: #025aa5; }
-
-        /* Modal Overlay */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.4);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-card {
-            background: #ffffff;
-            padding: 16px;
-            border-radius: 8px;
-            width: 320px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .modal-header {
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .close-btn { cursor: pointer; color: #888; font-weight: bold; }
-        textarea {
+            padding: 4px;
+            height: 100%;
             width: 100%;
-            height: 80px;
+        }
+        input[type="text"] {
+            flex: 1;
+            height: 36px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
-            padding: 8px;
-            font-size: 12px;
-            resize: none;
+            padding: 0 10px;
+            font-size: 13px;
             outline: none;
-            margin-bottom: 8px;
+            background: #ffffff;
         }
-        .send-btn {
-            width: 100%;
+        input[type="text"]:focus {
+            border-color: #0275d8;
+            box-shadow: 0 0 0 2px rgba(2, 117, 216, 0.2);
+        }
+        button {
+            height: 36px;
             background-color: #0275d8;
-            color: white;
+            color: #ffffff;
             border: none;
-            padding: 8px;
+            padding: 0 14px;
             border-radius: 6px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
         }
-        #statusMsg { font-size: 11px; margin-top: 6px; text-align: center; }
+        button:hover {
+            background-color: #025aa5;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Header Trigger Button -->
-    <button class="chat-trigger-btn" onclick="openModal()">💬 Operations Help</button>
-
-    <!-- Popup Modal -->
-    <div id="chatModal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <span>Contact Operations</span>
-                <span class="close-btn" onclick="closeModal()">✕</span>
-            </div>
-            <textarea id="userMessage" placeholder="Ask Operations a question..."></textarea>
-            <button class="send-btn" onclick="sendChatMessage()">Send Message</button>
-            <div id="statusMsg"></div>
-        </div>
+    <div class="chat-bar">
+        <input type="text" id="userMessage" placeholder="Chat Operations..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+        <button id="sendBtn" onclick="sendChatMessage()">Send</button>
     </div>
 
     <script>
@@ -116,23 +72,21 @@
 
         ZOHO.embeddedApp.init();
 
-        function openModal() { document.getElementById("chatModal").style.display = "flex"; }
-        function closeModal() { document.getElementById("chatModal").style.display = "none"; }
-
         function sendChatMessage() {
-            var msgInput = document.getElementById("userMessage");
-            var statusDiv = document.getElementById("statusMsg");
-            var messageText = msgInput.value.trim();
+            var inputEl = document.getElementById("userMessage");
+            var btnEl = document.getElementById("sendBtn");
+            var messageText = inputEl.value.trim();
 
-            if (!messageText) {
-                statusDiv.innerHTML = "<span style='color:red;'>Please type a message.</span>";
-                return;
-            }
+            if (!messageText) return;
 
             var name = currentUser ? (currentUser.full_name || currentUser.first_name) : "CRM User";
             var email = currentUser ? currentUser.email : "Unknown Email";
 
-            statusDiv.innerHTML = "Sending...";
+            // UI loading state
+            inputEl.disabled = true;
+            btnEl.disabled = true;
+            inputEl.value = "";
+            inputEl.placeholder = "Sending...";
 
             var funcData = {
                 "user_name": name,
@@ -141,11 +95,19 @@
             };
 
             ZOHO.CRM.FUNCTIONS.execute("send_home_page_chat", funcData).then(function(data) {
-                statusDiv.innerHTML = "<span style='color:green;'>Sent to Operations!</span>";
-                msgInput.value = "";
-                setTimeout(function() { closeModal(); statusDiv.innerHTML = ""; }, 1500);
+                inputEl.placeholder = "Sent to Operations! ✓";
+                setTimeout(function() {
+                    inputEl.placeholder = "Chat Operations...";
+                    inputEl.disabled = false;
+                    btnEl.disabled = false;
+                }, 3000);
             }).catch(function(err) {
-                statusDiv.innerHTML = "<span style='color:red;'>Failed to send.</span>";
+                inputEl.placeholder = "Error sending message!";
+                setTimeout(function() {
+                    inputEl.placeholder = "Chat Operations...";
+                    inputEl.disabled = false;
+                    btnEl.disabled = false;
+                }, 3000);
             });
         }
     </script>
