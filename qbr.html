@@ -69,8 +69,8 @@
 
                 // --- CONFIGURATION ---
                 var baseUrl = "https://analytics.zoho.com/open-view/1095920000086508229/74fc194320a48e985dc4e9f32ff6a9370febb0024331e205a573da105c847949";
-                var queryTableName = "Potentials";       // Verify table name in Analytics
-                var ownerColumnName = "Potential Owner Name"; // Verify column name in Analytics
+                var queryTableName = "Accounts with Parent Account Name Query";
+                var ownerColumnName = "a.Account Owner Name";
 
                 // Construct Criteria Filter
                 var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
