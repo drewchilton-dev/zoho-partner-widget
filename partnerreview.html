@@ -67,11 +67,28 @@
                     ownerName = "Chris McPheeters";
                 }
 
+                // --- CONFIGURATION ---
                 var baseUrl = "https://analytics.zoho.com/open-view/1095920000070034646/b751cd19260c07522a6779b2b8b118db37c21a122ea1ea424d9eb0a93df6019e";
                 var queryTableName = "Accounts with Parent Account Name Query";
                 var ownerColumnName = "a.Account Owner Name";
+                var regionColumnName = "a.Region Group";
 
-                var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
+                var rawCriteria = "";
+
+                // --- MANAGER / REGIONAL OVERRIDES ---
+                if (ownerName === "Meghan Acciavatti") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '"=\'East\')';
+                } 
+                else if (ownerName === "Rich O\'Boyle" || ownerName === "Rich OBoyle") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '"=\'West\')';
+                } 
+                else if (ownerName === "Gordon Myers") {
+                    rawCriteria = '("' + queryTableName + '"."' + regionColumnName + '" IN (\'Latam\', \'Canada\'))';
+                } 
+                else {
+                    rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
+                }
+
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
                 debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName + 
