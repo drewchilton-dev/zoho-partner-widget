@@ -21,11 +21,6 @@
             color: #333;
             word-break: break-all;
         }
-        #debugBar a {
-            color: #0275d8;
-            font-weight: bold;
-            margin-left: 10px;
-        }
         iframe {
             width: 100%;
             height: calc(100vh - 35px);
@@ -62,7 +57,7 @@
                 var lastName = (user.last_name && user.last_name !== "null") ? user.last_name.trim() : "";
                 var ownerName = (firstName + " " + lastName).trim() || user.full_name.trim();
 
-                // Override Drew Chilton to Chris McPheeters
+                // Override Drew Chilton to Rich OBoyle
                 if (ownerName === "Drew Chilton") {
                     ownerName = "Rich OBoyle";
                 }
@@ -91,8 +86,8 @@
 
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
-                debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName + 
-                                     " | <a href='" + fullUrl + "' target='_blank'>Open Link in New Tab</a>";
+                // --- LINK REMOVED HERE ---
+                debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName;
 
                 document.getElementById("analyticsDashboard").src = fullUrl;
             }).catch(function(err) {
