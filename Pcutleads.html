@@ -77,8 +77,7 @@
                 var rawCriteria = '("' + queryTableName + '"."' + ownerColumnName + '"=\'' + ownerName + '\')';
                 var fullUrl = baseUrl + '?ZOHO_CRITERIA=' + encodeURIComponent(rawCriteria);
 
-                debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName + 
-                                     " | <a href='" + fullUrl + "' target='_blank'>Open Link in New Tab</a>";
+                debugBar.innerHTML = "<strong>User Filter Applied:</strong> " + ownerName;
 
                 document.getElementById("analyticsDashboard").src = fullUrl;
             }).catch(function(err) {
