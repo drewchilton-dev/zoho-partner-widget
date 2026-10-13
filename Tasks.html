@@ -213,6 +213,11 @@
             }
         }
 
+        // Open Potential in CRM
+        function openPotentialRecord(recordId) {
+            ZOHO.CRM.UI.Record.open({Entity: "Potentials", RecordID: recordId});
+        }
+
         // 3. Render Table rows
         function renderPotentials(potentials) {
             const tbody = document.getElementById('potentialsTableBody');
@@ -231,7 +236,7 @@
                 const rowHtml = `
                     <tr class="hover:bg-gray-50" id="row_${id}">
                         <td class="px-4 py-3">
-                            <a href="/crm/tab/Potentials/${id}" target="_blank" class="text-blue-600 font-medium hover:underline">${potName}</a>
+                            <button onclick="openPotentialRecord('${id}')" class="text-blue-600 font-medium hover:underline text-left bg-transparent border-none cursor-pointer">${potName}</button>
                         </td>
                         <td class="px-4 py-3">${ownerName}</td>
                         <td class="px-4 py-3">${accountName}</td>
