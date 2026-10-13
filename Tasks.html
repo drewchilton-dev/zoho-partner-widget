@@ -110,7 +110,7 @@
             <textarea id="newNoteText" rows="4" class="w-full border border-gray-300 rounded p-2 mb-3 text-xs focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" placeholder="Type your note here..."></textarea>
             
             <!-- Share to Customer Checkbox -->
-            <div class="flex items-center gap-2 mb-4 bg-gray-50 p-2 rounded border border-gray-200">
+            <div class="flex items-center gap-2 mb-4 bg-gray-50 p-2.5 rounded border border-gray-200">
                 <input type="checkbox" id="shareToCustomer" class="rounded border-gray-300 text-acdiGreen focus:ring-acdiGreen h-4 w-4 cursor-pointer">
                 <label for="shareToCustomer" class="text-xs text-acdiDark font-semibold cursor-pointer select-none">Share to Customer</label>
             </div>
@@ -325,7 +325,7 @@
             document.getElementById('newNoteTitle').value = '';
             document.getElementById('newNoteText').value = '';
 
-            // Auto-check "Share to Customer" if the active filter is PaperCut Leads
+            // Auto-check "Share to Customer" if the selected filter is PaperCut Leads
             const currentFilter = document.getElementById('taskTypeFilter').value;
             const shareCheckbox = document.getElementById('shareToCustomer');
             if (currentFilter && currentFilter.toLowerCase().includes("papercut")) {
@@ -371,7 +371,7 @@
                 try {
                     await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
                 } catch (noteErr) {
-                    // Fallback in case "Share_to_Customer" API name differs in this org
+                    // Fallback: If "Share_to_Customer" is not a recognized API name in this CRM org, insert standard note
                     if (recordData["Share_to_Customer"]) {
                         delete recordData["Share_to_Customer"];
                         await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
@@ -382,7 +382,7 @@
 
                 closeNotesModal();
 
-                // 2. Direct Task Auto-Close (Immediate completion via SDK)
+                // 2. Direct Task Auto-Close via SDK (Reliable native API call)
                 const connectedTask = potentialToTaskMap[potentialId];
                 if (connectedTask && connectedTask.id) {
                     try {
@@ -401,15 +401,6 @@
                     } catch (taskErr) {
                         console.warn("Direct task completion notice:", taskErr);
                     }
-                }
-
-                // 3. Isolated background call to AutoCloseTaskedPotentials
-                try {
-                    await ZOHO.CRM.FUNCTIONS.execute("AutoCloseTaskedPotentials", {
-                        "arguments": JSON.stringify({ "dealId": potentialId })
-                    });
-                } catch (funcErr) {
-                    console.log("Background function hook notice:", funcErr);
                 }
 
                 alert("Note added and task updated successfully!");
