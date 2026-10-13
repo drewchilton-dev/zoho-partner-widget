@@ -50,7 +50,6 @@
                     <option value="PaperCut Leads">PaperCut Leads</option>
                     <option value="New MidStrategic Assigned">New MidStrategic Assigned</option>
                     <option value="Strategic Follow Up">Strategic Follow Up</option>
-                    <option value="Blitz">Blitz</option>
                 </select>
             </div>
 
@@ -338,9 +337,17 @@
             }
 
             try {
+                // 1. Insert Note into CRM
                 await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
                 closeNotesModal();
-                alert("Note added successfully!");
+
+                // 2. Trigger auto-close Deluge function directly
+                await ZOHO.CRM.FUNCTIONS.execute("automation.auto_close_past_due_tasks", {
+                    "dealId": potentialId
+                });
+
+                alert("Note added and tasks updated successfully!");
+                fetchTasksAndPotentials(); // Refresh grid to clear completed tasks
             } catch (error) {
                 alert("Error saving note.");
                 console.error(error);
