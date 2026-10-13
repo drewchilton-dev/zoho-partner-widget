@@ -70,11 +70,12 @@
                     <th class="px-4 py-3 font-semibold text-gray-600">Stage</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">Deal Category</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">Closing Date</th>
+                    <th class="px-4 py-3 font-semibold text-gray-600">Remind Date</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">Actions</th>
                 </tr>
             </thead>
             <tbody id="potentialsTableBody" class="divide-y divide-gray-200">
-                <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>
+                <tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>
             </tbody>
         </table>
     </div>
@@ -102,14 +103,14 @@
             if (!dateStr) return false; 
 
             const today = new Date();
-            const todayStr = today.toLocaleDateString('en-CA'); // Format: YYYY-MM-DD
+            const todayStr = today.toLocaleDateString('en-CA'); 
 
             if (filterType === 'Past Due') return dateStr < todayStr;
             if (filterType === 'Today') return dateStr === todayStr;
             if (filterType === 'This Month') return dateStr.substring(0, 7) === todayStr.substring(0, 7);
             if (filterType === 'This Week') {
                 const curr = new Date();
-                const first = curr.getDate() - curr.getDay(); // Sunday
+                const first = curr.getDate() - curr.getDay(); 
                 const startOfWeek = new Date(curr.setDate(first)).toLocaleDateString('en-CA');
                 const endOfWeek = new Date(curr.setDate(first + 6)).toLocaleDateString('en-CA');
                 return dateStr >= startOfWeek && dateStr <= endOfWeek;
@@ -136,10 +137,10 @@
                         
                         if (chrisUser) {
                             currentUser = chrisUser;
-                            console.log("Override successful. Widget is now fetching data for:", currentUser.full_name);
+                            console.log("Override successful.");
                         }
                     } catch (error) {
-                        console.error("Error fetching users for testing override: ", error);
+                        console.error("Error fetching users: ", error);
                     }
                 }
             });
@@ -153,40 +154,35 @@
             const tbody = document.getElementById('potentialsTableBody');
             
             if (!taskType) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>';
 
             try {
-                // Search for Open Tasks owned by current user matching the Task_Type
                 const taskQuery = `(Task_Type:equals:${taskType})`;
                 const tasksResponse = await ZOHO.CRM.API.searchRecord({Entity: "Tasks", Type: "criteria", Query: taskQuery});
                 
                 if (!tasksResponse.data || tasksResponse.data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No open tasks found for this category.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No open tasks found.</td></tr>';
                     return;
                 }
 
-                // Filter tasks by status, owner, AND due date filter
                 const relevantTasks = tasksResponse.data.filter(t => {
                     if (t.Status === "Completed" || t.Owner.id !== currentUser.id) return false;
                     return checkDateFilter(t.Due_Date || '', taskDateFilter);
                 });
                 
-                // Extract Potential IDs (What_Id)
                 const potentialIds = relevantTasks.map(t => t.What_Id ? t.What_Id.id : null).filter(id => id !== null);
                 
                 if (potentialIds.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No potentials connected to these filtered tasks.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No potentials connected to these tasks.</td></tr>';
                     return;
                 }
 
-                // Remove duplicates if multiple tasks link to the same potential
                 const uniquePotentialIds = [...new Set(potentialIds)];
                 
-                // Fetch the Potentials
                 let potentialsData = [];
                 for (let pid of uniquePotentialIds) {
                     const potRes = await ZOHO.CRM.API.getRecord({Entity: "Potentials", RecordID: pid});
@@ -195,13 +191,12 @@
                     }
                 }
 
-                // Apply Potential Closing Date Filter
                 const finalPotentials = potentialsData.filter(pot => {
                     return checkDateFilter(pot.Closing_Date || '', potDateFilter);
                 });
 
                 if (finalPotentials.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No potentials match the selected Closing Date filter.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No potentials match the filter.</td></tr>';
                     return;
                 }
 
@@ -209,13 +204,16 @@
 
             } catch (error) {
                 console.error("Error fetching data: ", error);
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">Error loading data. Check console.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">Error loading data.</td></tr>';
             }
         }
 
-        // Open Potential in CRM
-        function openPotentialRecord(recordId) {
-            ZOHO.CRM.UI.Record.open({Entity: "Potentials", RecordID: recordId});
+        // Custom Open Record Function without exposing Org ID
+        function openPotential(recordId) {
+            // Using the absolute URL forces the browser to leave GitHub Pages.
+            // Zoho automatically routes the user to their specific Org ID behind the scenes.
+            const url = `https://crm.zoho.com/crm/tab/Potentials/${recordId}`;
+            window.open(url, '_blank');
         }
 
         // 3. Render Table rows
@@ -232,11 +230,13 @@
                 const currentStage = pot.Stage || '';
                 const currentCat = pot.Deal_Category || '';
                 const closingDate = pot.Closing_Date || '';
+                // Ensure API name matches your CRM exactly (e.g., Remind_Date)
+                const remindDate = pot.Remind_Date || ''; 
 
                 const rowHtml = `
                     <tr class="hover:bg-gray-50" id="row_${id}">
                         <td class="px-4 py-3">
-                            <button onclick="openPotentialRecord('${id}')" class="text-blue-600 font-medium hover:underline text-left bg-transparent border-none cursor-pointer">${potName}</button>
+                            <button onclick="openPotential('${id}')" class="text-blue-600 font-medium hover:underline text-left bg-transparent border-none cursor-pointer">${potName}</button>
                         </td>
                         <td class="px-4 py-3">${ownerName}</td>
                         <td class="px-4 py-3">${accountName}</td>
@@ -244,6 +244,7 @@
                         <td class="px-4 py-3">${currentStage}</td>
                         <td class="px-4 py-3">${currentCat}</td>
                         <td class="px-4 py-3"><input type="date" id="date_${id}" value="${closingDate}" class="border border-gray-300 rounded p-1 text-sm"></td>
+                        <td class="px-4 py-3"><input type="date" id="remind_${id}" value="${remindDate}" class="border border-gray-300 rounded p-1 text-sm"></td>
                         <td class="px-4 py-3 flex gap-2">
                             <button onclick="updatePotential('${id}')" class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">Save</button>
                             <button onclick="openNotesModal('${id}')" class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded border border-blue-300 hover:bg-blue-200">Add Note</button>
@@ -257,18 +258,19 @@
         // 4. Update Potential Record (Inline Edit)
         async function updatePotential(recordId) {
             const newDate = document.getElementById(`date_${recordId}`).value;
+            const newRemindDate = document.getElementById(`remind_${recordId}`).value;
 
             const config = {
                 Entity: "Potentials",
                 APIData: {
                     "id": recordId,
-                    "Closing_Date": newDate
+                    "Closing_Date": newDate,
+                    "Remind_Date": newRemindDate // Verify this API name in your CRM Settings
                 }
             };
 
             try {
                 await ZOHO.CRM.API.updateRecord(config);
-                // Highlight row green briefly to show success
                 const row = document.getElementById(`row_${recordId}`);
                 row.classList.add("bg-green-100");
                 setTimeout(() => row.classList.remove("bg-green-100"), 1500);
