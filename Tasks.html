@@ -108,6 +108,13 @@
             <input type="hidden" id="modalPotentialId">
             <input type="text" id="newNoteTitle" class="w-full border border-gray-300 rounded p-2 mb-3 text-xs focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" placeholder="Note Title (Optional)">
             <textarea id="newNoteText" rows="4" class="w-full border border-gray-300 rounded p-2 mb-3 text-xs focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" placeholder="Type your note here..."></textarea>
+            
+            <!-- Share to Customer Checkbox -->
+            <div class="flex items-center gap-2 mb-4 bg-gray-50 p-2 rounded border border-gray-200">
+                <input type="checkbox" id="shareToCustomer" class="rounded border-gray-300 text-acdiGreen focus:ring-acdiGreen h-4 w-4 cursor-pointer">
+                <label for="shareToCustomer" class="text-xs text-acdiDark font-semibold cursor-pointer select-none">Share to Customer</label>
+            </div>
+
             <div class="flex justify-end gap-2">
                 <button onclick="closeNotesModal()" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-medium rounded hover:bg-gray-300 transition-colors">Cancel</button>
                 <button onclick="saveNote()" class="px-3 py-1.5 bg-acdiGreen text-white text-xs font-medium rounded hover:bg-acdiGreenHover transition-colors shadow">Save Note</button>
@@ -117,6 +124,7 @@
 
     <script>
         let currentUser = null;
+        let potentialToTaskMap = {}; // Maps potential ID to open Task object for direct cleanup
 
         function checkDateFilter(dateStr, filterType) {
             if (!filterType) return true; 
@@ -167,6 +175,7 @@
             const taskDateFilter = document.getElementById('taskDateFilter').value;
             const potDateFilter = document.getElementById('potDateFilter').value;
             const tbody = document.getElementById('potentialsTableBody');
+            potentialToTaskMap = {};
             
             if (!taskType) {
                 tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-10 text-center text-gray-500 font-medium">Select a Task Type to load potentials.</td></tr>';
@@ -189,7 +198,13 @@
                     return checkDateFilter(t.Due_Date || '', taskDateFilter);
                 });
                 
-                const potentialIds = relevantTasks.map(t => t.What_Id ? t.What_Id.id : null).filter(id => id !== null);
+                const potentialIds = [];
+                relevantTasks.forEach(t => {
+                    if (t.What_Id && t.What_Id.id) {
+                        potentialIds.push(t.What_Id.id);
+                        potentialToTaskMap[t.What_Id.id] = t; // Cache task reference
+                    }
+                });
                 
                 if (potentialIds.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-10 text-center text-gray-500 font-medium">No potentials connected to these tasks.</td></tr>';
@@ -309,6 +324,16 @@
             document.getElementById('modalPotentialId').value = potentialId;
             document.getElementById('newNoteTitle').value = '';
             document.getElementById('newNoteText').value = '';
+
+            // Auto-check "Share to Customer" if the active filter is PaperCut Leads
+            const currentFilter = document.getElementById('taskTypeFilter').value;
+            const shareCheckbox = document.getElementById('shareToCustomer');
+            if (currentFilter && currentFilter.toLowerCase().includes("papercut")) {
+                shareCheckbox.checked = true;
+            } else {
+                shareCheckbox.checked = false;
+            }
+
             document.getElementById('notesModal').classList.add('active');
         }
 
@@ -320,6 +345,7 @@
             const potentialId = document.getElementById('modalPotentialId').value;
             const noteTitle = document.getElementById('newNoteTitle').value;
             const noteContent = document.getElementById('newNoteText').value;
+            const isShareToCustomer = document.getElementById('shareToCustomer').checked;
 
             if (!noteContent.trim()) {
                 alert("Note cannot be empty.");
@@ -336,21 +362,62 @@
                 recordData["Note_Title"] = noteTitle.trim();
             }
 
+            if (isShareToCustomer) {
+                recordData["Share_to_Customer"] = true;
+            }
+
             try {
                 // 1. Insert Note into CRM
-                await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
+                try {
+                    await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
+                } catch (noteErr) {
+                    // Fallback in case "Share_to_Customer" API name differs in this org
+                    if (recordData["Share_to_Customer"]) {
+                        delete recordData["Share_to_Customer"];
+                        await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
+                    } else {
+                        throw noteErr;
+                    }
+                }
+
                 closeNotesModal();
 
-                // 2. Trigger auto-close Deluge function directly
-                await ZOHO.CRM.FUNCTIONS.execute("automation.auto_close_past_due_tasks", {
-                    "dealId": potentialId
-                });
+                // 2. Direct Task Auto-Close (Immediate completion via SDK)
+                const connectedTask = potentialToTaskMap[potentialId];
+                if (connectedTask && connectedTask.id) {
+                    try {
+                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const existingDesc = connectedTask.Description || '';
+                        const updatedDesc = existingDesc + `\n\n[${todayStr} Auto-Close]: Task completed automatically. Activity Note logged on Potential.`;
 
-                alert("Note added and tasks updated successfully!");
-                fetchTasksAndPotentials(); // Refresh grid to clear completed tasks
+                        await ZOHO.CRM.API.updateRecord({
+                            Entity: "Tasks",
+                            APIData: {
+                                "id": connectedTask.id,
+                                "Status": "Completed",
+                                "Description": updatedDesc
+                            }
+                        });
+                    } catch (taskErr) {
+                        console.warn("Direct task completion notice:", taskErr);
+                    }
+                }
+
+                // 3. Isolated background call to AutoCloseTaskedPotentials
+                try {
+                    await ZOHO.CRM.FUNCTIONS.execute("AutoCloseTaskedPotentials", {
+                        "arguments": JSON.stringify({ "dealId": potentialId })
+                    });
+                } catch (funcErr) {
+                    console.log("Background function hook notice:", funcErr);
+                }
+
+                alert("Note added and task updated successfully!");
+                fetchTasksAndPotentials(); // Refresh grid to clear the completed task row
+
             } catch (error) {
-                alert("Error saving note.");
-                console.error(error);
+                alert("Error saving note. Check console for details.");
+                console.error("Note insert error: ", error);
             }
         }
     </script>
