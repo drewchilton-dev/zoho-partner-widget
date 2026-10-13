@@ -84,6 +84,7 @@
         <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
             <h2 class="text-lg font-bold mb-4">Add Note</h2>
             <input type="hidden" id="modalPotentialId">
+            <input type="text" id="newNoteTitle" class="w-full border border-gray-300 rounded p-2 mb-3" placeholder="Note Title (Optional)">
             <textarea id="newNoteText" rows="4" class="w-full border border-gray-300 rounded p-2 mb-4" placeholder="Type your note here..."></textarea>
             <div class="flex justify-end gap-2">
                 <button onclick="closeNotesModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
@@ -229,7 +230,9 @@
 
                 const rowHtml = `
                     <tr class="hover:bg-gray-50" id="row_${id}">
-                        <td class="px-4 py-3 text-blue-600 font-medium">${potName}</td>
+                        <td class="px-4 py-3">
+                            <a href="/crm/tab/Potentials/${id}" target="_blank" class="text-blue-600 font-medium hover:underline">${potName}</a>
+                        </td>
                         <td class="px-4 py-3">${ownerName}</td>
                         <td class="px-4 py-3">${accountName}</td>
                         <td class="px-4 py-3">${endUser}</td>
@@ -273,6 +276,7 @@
         // 5. Notes Modal Logic
         function openNotesModal(potentialId) {
             document.getElementById('modalPotentialId').value = potentialId;
+            document.getElementById('newNoteTitle').value = '';
             document.getElementById('newNoteText').value = '';
             document.getElementById('notesModal').classList.add('active');
         }
@@ -283,6 +287,7 @@
 
         async function saveNote() {
             const potentialId = document.getElementById('modalPotentialId').value;
+            const noteTitle = document.getElementById('newNoteTitle').value;
             const noteContent = document.getElementById('newNoteText').value;
 
             if (!noteContent.trim()) {
@@ -293,9 +298,12 @@
             const recordData = {
                 "Parent_Id": potentialId,
                 "se_module": "Potentials",
-                "Note_Title": "Update via Action Center",
                 "Note_Content": noteContent
             };
+
+            if (noteTitle.trim()) {
+                recordData["Note_Title"] = noteTitle.trim();
+            }
 
             try {
                 await ZOHO.CRM.API.insertRecord({Entity: "Notes", APIData: recordData});
