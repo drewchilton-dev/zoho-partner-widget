@@ -43,6 +43,7 @@
                     <option value="PaperCut Leads">PaperCut Leads</option>
                     <option value="New MidStrategic Assigned">New MidStrategic Assigned</option>
                     <option value="Strategic Follow Up">Strategic Follow Up</option>
+                    <option value="Blitz">Blitz</option>
                 </select>
             </div>
 
@@ -74,7 +75,6 @@
 
     <!-- Data Table -->
     <div class="bg-white shadow-lg rounded-lg overflow-x-auto border border-gray-200">
-        <!-- Removed whitespace-nowrap here so long names wrap to a new line instead of stretching the window -->
         <table class="min-w-full text-left text-sm">
             <thead class="bg-acdiDark text-white">
                 <tr>
@@ -138,12 +138,12 @@
                 const loggedInName = currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`;
                 
                 if (loggedInName.includes("Drew Chilton")) {
-                    console.log("Test Mode: Drew Chilton detected. Fetching Chris McPheeters' ID...");
+                    console.log("Test Mode: Drew Chilton detected. Fetching Jeff Vincent' ID...");
                     try {
                         const userResponse = await ZOHO.CRM.API.getAllUsers({Type: "ActiveUsers"});
                         const chrisUser = userResponse.users.find(u => 
-                            (u.full_name && u.full_name.includes("Chris McPheeters")) || 
-                            (u.first_name === "Chris" && u.last_name === "McPheeters")
+                            (u.full_name && u.full_name.includes("Jeff Vincent")) || 
+                            (u.first_name === "Jeff" && u.last_name === "Vincent")
                         );
                         if (chrisUser) {
                             currentUser = chrisUser;
