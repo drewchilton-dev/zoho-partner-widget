@@ -15,18 +15,46 @@
 </head>
 <body class="bg-gray-50 p-4">
 
-    <!-- Header & Filter -->
-    <div class="flex justify-between items-center mb-6">
+    <!-- Header & Filters -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h1 class="text-xl font-bold text-gray-800">Action Center: Connected Potentials</h1>
-        <div class="flex items-center gap-2">
-            <label for="taskTypeFilter" class="font-semibold text-sm text-gray-600">Task Type Filter:</label>
-            <select id="taskTypeFilter" class="border border-gray-300 rounded px-3 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
-                <option value="">-- Select Task Type --</option>
-                <option value="Past Due Potentials">Past Due Potentials</option>
-                <option value="PaperCut Leads">PaperCut Leads</option>
-                <option value="New MidStrategic Assigned">New MidStrategic Assigned</option>
-                <option value="Strategic Follow Up">Strategic Follow Up</option>
-            </select>
+        
+        <div class="flex flex-wrap items-center gap-3">
+            <!-- Task Type Filter -->
+            <div class="flex items-center gap-2">
+                <label for="taskTypeFilter" class="font-semibold text-sm text-gray-600">Task Type:</label>
+                <select id="taskTypeFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                    <option value="">-- Select Task Type --</option>
+                    <option value="Past Due Potentials">Past Due Potentials</option>
+                    <option value="PaperCut Leads">PaperCut Leads</option>
+                    <option value="New MidStrategic Assigned">New MidStrategic Assigned</option>
+                    <option value="Strategic Follow Up">Strategic Follow Up</option>
+                </select>
+            </div>
+
+            <!-- Task Due Date Filter -->
+            <div class="flex items-center gap-2">
+                <label for="taskDateFilter" class="font-semibold text-sm text-gray-600">Task Due:</label>
+                <select id="taskDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                    <option value="">All</option>
+                    <option value="Today">Today</option>
+                    <option value="This Week">This Week</option>
+                    <option value="This Month">This Month</option>
+                    <option value="Past Due">Past Due</option>
+                </select>
+            </div>
+
+            <!-- Potential Closing Date Filter -->
+            <div class="flex items-center gap-2">
+                <label for="potDateFilter" class="font-semibold text-sm text-gray-600">Closing Date:</label>
+                <select id="potDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                    <option value="">All</option>
+                    <option value="Today">Today</option>
+                    <option value="This Week">This Week</option>
+                    <option value="This Month">This Month</option>
+                    <option value="Past Due">Past Due</option>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -36,6 +64,7 @@
             <thead class="bg-gray-100 border-b">
                 <tr>
                     <th class="px-4 py-3 font-semibold text-gray-600">Potential Name</th>
+                    <th class="px-4 py-3 font-semibold text-gray-600">Potential Owner</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">Account Name</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">End User Account</th>
                     <th class="px-4 py-3 font-semibold text-gray-600">Stage</th>
@@ -45,7 +74,7 @@
                 </tr>
             </thead>
             <tbody id="potentialsTableBody" class="divide-y divide-gray-200">
-                <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>
+                <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>
             </tbody>
         </table>
     </div>
@@ -66,16 +95,32 @@
     <script>
         let currentUser = null;
 
-        // Hardcoded Dropdown Options
-        const stageOptions = ["Qualification", "Needs Analysis", "Value Proposition", "Identify Decision Makers", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"];
-        const categoryOptions = ["Standard", "Mid", "Strategic"];
+        // Date Check Helper Function
+        function checkDateFilter(dateStr, filterType) {
+            if (!filterType) return true; 
+            if (!dateStr) return false; 
+
+            const today = new Date();
+            const todayStr = today.toLocaleDateString('en-CA'); // Format: YYYY-MM-DD
+
+            if (filterType === 'Past Due') return dateStr < todayStr;
+            if (filterType === 'Today') return dateStr === todayStr;
+            if (filterType === 'This Month') return dateStr.substring(0, 7) === todayStr.substring(0, 7);
+            if (filterType === 'This Week') {
+                const curr = new Date();
+                const first = curr.getDate() - curr.getDay(); // Sunday
+                const startOfWeek = new Date(curr.setDate(first)).toLocaleDateString('en-CA');
+                const endOfWeek = new Date(curr.setDate(first + 6)).toLocaleDateString('en-CA');
+                return dateStr >= startOfWeek && dateStr <= endOfWeek;
+            }
+            return true;
+        }
 
         // 1. Initialize Zoho SDK & Override for Testing
         ZOHO.embeddedApp.init().then(function() {
             ZOHO.CRM.CONFIG.getCurrentUser().then(async function(data){
                 currentUser = data.users[0];
                 
-                // Construct the full name just in case the SDK returns it split
                 const loggedInName = currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`;
                 
                 // --- TEST OVERRIDE FOR DREW CHILTON ---
@@ -91,28 +136,27 @@
                         if (chrisUser) {
                             currentUser = chrisUser;
                             console.log("Override successful. Widget is now fetching data for:", currentUser.full_name);
-                        } else {
-                            console.warn("Test Override Failed: Could not find Chris McPheeters in active users.");
                         }
                     } catch (error) {
                         console.error("Error fetching users for testing override: ", error);
                     }
                 }
-                // --------------------------------------
             });
         });
 
         // 2. Fetch Data Flow
         async function fetchTasksAndPotentials() {
             const taskType = document.getElementById('taskTypeFilter').value;
+            const taskDateFilter = document.getElementById('taskDateFilter').value;
+            const potDateFilter = document.getElementById('potDateFilter').value;
             const tbody = document.getElementById('potentialsTableBody');
             
             if (!taskType) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>';
 
             try {
                 // Search for Open Tasks owned by current user matching the Task_Type
@@ -120,18 +164,21 @@
                 const tasksResponse = await ZOHO.CRM.API.searchRecord({Entity: "Tasks", Type: "criteria", Query: taskQuery});
                 
                 if (!tasksResponse.data || tasksResponse.data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No open tasks found for this category.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No open tasks found for this category.</td></tr>';
                     return;
                 }
 
-                // Filter tasks to only include those not completed and owned by the user
-                const relevantTasks = tasksResponse.data.filter(t => t.Status !== "Completed" && t.Owner.id === currentUser.id);
+                // Filter tasks by status, owner, AND due date filter
+                const relevantTasks = tasksResponse.data.filter(t => {
+                    if (t.Status === "Completed" || t.Owner.id !== currentUser.id) return false;
+                    return checkDateFilter(t.Due_Date || '', taskDateFilter);
+                });
                 
                 // Extract Potential IDs (What_Id)
                 const potentialIds = relevantTasks.map(t => t.What_Id ? t.What_Id.id : null).filter(id => id !== null);
                 
                 if (potentialIds.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No potentials connected to these tasks.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No potentials connected to these filtered tasks.</td></tr>';
                     return;
                 }
 
@@ -147,11 +194,21 @@
                     }
                 }
 
-                renderPotentials(potentialsData);
+                // Apply Potential Closing Date Filter
+                const finalPotentials = potentialsData.filter(pot => {
+                    return checkDateFilter(pot.Closing_Date || '', potDateFilter);
+                });
+
+                if (finalPotentials.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">No potentials match the selected Closing Date filter.</td></tr>';
+                    return;
+                }
+
+                renderPotentials(finalPotentials);
 
             } catch (error) {
                 console.error("Error fetching data: ", error);
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-500">Error loading data. Check console.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">Error loading data. Check console.</td></tr>';
             }
         }
 
@@ -163,33 +220,21 @@
             potentials.forEach(pot => {
                 const id = pot.id;
                 const potName = pot.Deal_Name || 'N/A';
+                const ownerName = pot.Owner ? pot.Owner.name : 'N/A';
                 const accountName = pot.Account_Name ? pot.Account_Name.name : 'N/A';
-                const endUser = pot.End_User_Account ? pot.End_User_Account.name : ''; // Ensure correct API name
+                const endUser = pot.Existing_End_User_Account ? pot.Existing_End_User_Account.name : '';
                 const currentStage = pot.Stage || '';
                 const currentCat = pot.Deal_Category || '';
                 const closingDate = pot.Closing_Date || '';
 
-                // Build Stage Options
-                let stageHtml = `<select id="stage_${id}" class="border border-gray-300 rounded p-1 text-sm">`;
-                stageOptions.forEach(opt => {
-                    stageHtml += `<option value="${opt}" ${currentStage === opt ? 'selected' : ''}>${opt}</option>`;
-                });
-                stageHtml += `</select>`;
-
-                // Build Category Options
-                let catHtml = `<select id="cat_${id}" class="border border-gray-300 rounded p-1 text-sm">`;
-                categoryOptions.forEach(opt => {
-                    catHtml += `<option value="${opt}" ${currentCat === opt ? 'selected' : ''}>${opt}</option>`;
-                });
-                catHtml += `</select>`;
-
                 const rowHtml = `
                     <tr class="hover:bg-gray-50" id="row_${id}">
                         <td class="px-4 py-3 text-blue-600 font-medium">${potName}</td>
+                        <td class="px-4 py-3">${ownerName}</td>
                         <td class="px-4 py-3">${accountName}</td>
                         <td class="px-4 py-3">${endUser}</td>
-                        <td class="px-4 py-3">${stageHtml}</td>
-                        <td class="px-4 py-3">${catHtml}</td>
+                        <td class="px-4 py-3">${currentStage}</td>
+                        <td class="px-4 py-3">${currentCat}</td>
                         <td class="px-4 py-3"><input type="date" id="date_${id}" value="${closingDate}" class="border border-gray-300 rounded p-1 text-sm"></td>
                         <td class="px-4 py-3 flex gap-2">
                             <button onclick="updatePotential('${id}')" class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">Save</button>
@@ -203,16 +248,12 @@
 
         // 4. Update Potential Record (Inline Edit)
         async function updatePotential(recordId) {
-            const newStage = document.getElementById(`stage_${recordId}`).value;
-            const newCat = document.getElementById(`cat_${recordId}`).value;
             const newDate = document.getElementById(`date_${recordId}`).value;
 
             const config = {
                 Entity: "Potentials",
                 APIData: {
                     "id": recordId,
-                    "Stage": newStage,
-                    "Deal_Category": newCat,
                     "Closing_Date": newDate
                 }
             };
