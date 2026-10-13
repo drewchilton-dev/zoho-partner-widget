@@ -70,10 +70,35 @@
         const stageOptions = ["Qualification", "Needs Analysis", "Value Proposition", "Identify Decision Makers", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"];
         const categoryOptions = ["Standard", "Mid", "Strategic"];
 
-        // 1. Initialize Zoho SDK
+        // 1. Initialize Zoho SDK & Override for Testing
         ZOHO.embeddedApp.init().then(function() {
-            ZOHO.CRM.CONFIG.getCurrentUser().then(function(data){
+            ZOHO.CRM.CONFIG.getCurrentUser().then(async function(data){
                 currentUser = data.users[0];
+                
+                // Construct the full name just in case the SDK returns it split
+                const loggedInName = currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`;
+                
+                // --- TEST OVERRIDE FOR DREW CHILTON ---
+                if (loggedInName.includes("Drew Chilton")) {
+                    console.log("Test Mode: Drew Chilton detected. Fetching Chris McPheeters' ID...");
+                    try {
+                        const userResponse = await ZOHO.CRM.API.getAllUsers({Type: "ActiveUsers"});
+                        const chrisUser = userResponse.users.find(u => 
+                            (u.full_name && u.full_name.includes("Chris McPheeters")) || 
+                            (u.first_name === "Chris" && u.last_name === "McPheeters")
+                        );
+                        
+                        if (chrisUser) {
+                            currentUser = chrisUser;
+                            console.log("Override successful. Widget is now fetching data for:", currentUser.full_name);
+                        } else {
+                            console.warn("Test Override Failed: Could not find Chris McPheeters in active users.");
+                        }
+                    } catch (error) {
+                        console.error("Error fetching users for testing override: ", error);
+                    }
+                }
+                // --------------------------------------
             });
         });
 
