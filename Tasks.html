@@ -5,25 +5,39 @@
     <title>Rep Action Center</title>
     <!-- Include Tailwind CSS for modern, clean styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Custom ACDI Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        acdiDark: '#263238', /* Dark Slate from logo */
+                        acdiGreen: '#8DC63F', /* Lime Green from logo */
+                        acdiGreenHover: '#7ab332'
+                    }
+                }
+            }
+        }
+    </script>
     <!-- Include Zoho CRM JS SDK -->
     <script src="https://live.zwidgets.com/js-sdk/1.1/ZohoEmbededAppSDK.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        .modal { display: none; background-color: rgba(0,0,0,0.5); }
+        .modal { display: none; background-color: rgba(38, 50, 56, 0.7); }
         .modal.active { display: flex; }
     </style>
 </head>
-<body class="bg-gray-50 p-4">
+<body class="bg-gray-50 p-4 text-acdiDark">
 
     <!-- Header & Filters -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 class="text-xl font-bold text-gray-800">Action Center: Connected Potentials</h1>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-acdiGreen pb-4">
+        <h1 class="text-2xl font-bold text-acdiDark tracking-tight">Action Center: Connected Potentials</h1>
         
         <div class="flex flex-wrap items-center gap-3">
             <!-- Task Type Filter -->
             <div class="flex items-center gap-2">
-                <label for="taskTypeFilter" class="font-semibold text-sm text-gray-600">Task Type:</label>
-                <select id="taskTypeFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                <label for="taskTypeFilter" class="font-semibold text-sm text-acdiDark">Task Type:</label>
+                <select id="taskTypeFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" onchange="fetchTasksAndPotentials()">
                     <option value="">-- Select Task Type --</option>
                     <option value="Past Due Potentials">Past Due Potentials</option>
                     <option value="PaperCut Leads">PaperCut Leads</option>
@@ -34,8 +48,8 @@
 
             <!-- Task Due Date Filter -->
             <div class="flex items-center gap-2">
-                <label for="taskDateFilter" class="font-semibold text-sm text-gray-600">Task Due:</label>
-                <select id="taskDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                <label for="taskDateFilter" class="font-semibold text-sm text-acdiDark">Task Due:</label>
+                <select id="taskDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" onchange="fetchTasksAndPotentials()">
                     <option value="">All</option>
                     <option value="Today">Today</option>
                     <option value="This Week">This Week</option>
@@ -46,8 +60,8 @@
 
             <!-- Potential Closing Date Filter -->
             <div class="flex items-center gap-2">
-                <label for="potDateFilter" class="font-semibold text-sm text-gray-600">Closing Date:</label>
-                <select id="potDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm" onchange="fetchTasksAndPotentials()">
+                <label for="potDateFilter" class="font-semibold text-sm text-acdiDark">Closing Date:</label>
+                <select id="potDateFilter" class="border border-gray-300 rounded px-2 py-1 text-sm shadow-sm focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" onchange="fetchTasksAndPotentials()">
                     <option value="">All</option>
                     <option value="Today">Today</option>
                     <option value="This Week">This Week</option>
@@ -59,37 +73,38 @@
     </div>
 
     <!-- Data Table -->
-    <div class="bg-white shadow rounded-lg overflow-x-auto">
-        <table class="min-w-full text-left text-sm whitespace-nowrap">
-            <thead class="bg-gray-100 border-b">
+    <div class="bg-white shadow-lg rounded-lg overflow-x-auto border border-gray-200">
+        <!-- Removed whitespace-nowrap here so long names wrap to a new line instead of stretching the window -->
+        <table class="min-w-full text-left text-sm">
+            <thead class="bg-acdiDark text-white">
                 <tr>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Potential Name</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Potential Owner</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Account Name</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">End User Account</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Stage</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Deal Category</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Closing Date</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Remind Date</th>
-                    <th class="px-4 py-3 font-semibold text-gray-600">Actions</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Potential Name</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Potential Owner</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Account Name</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">End User Account</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Stage</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Deal Category</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Closing Date</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap">Remind Date</th>
+                    <th class="px-3 py-3 font-semibold whitespace-nowrap text-center">Actions</th>
                 </tr>
             </thead>
             <tbody id="potentialsTableBody" class="divide-y divide-gray-200">
-                <tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>
+                <tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 font-medium">Select a Task Type to load potentials.</td></tr>
             </tbody>
         </table>
     </div>
 
     <!-- Notes Modal -->
     <div id="notesModal" class="modal fixed inset-0 z-50 items-center justify-center">
-        <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
-            <h2 class="text-lg font-bold mb-4">Add Note</h2>
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative border-t-4 border-acdiGreen">
+            <h2 class="text-xl font-bold mb-4 text-acdiDark">Add Note</h2>
             <input type="hidden" id="modalPotentialId">
-            <input type="text" id="newNoteTitle" class="w-full border border-gray-300 rounded p-2 mb-3" placeholder="Note Title (Optional)">
-            <textarea id="newNoteText" rows="4" class="w-full border border-gray-300 rounded p-2 mb-4" placeholder="Type your note here..."></textarea>
-            <div class="flex justify-end gap-2">
-                <button onclick="closeNotesModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
-                <button onclick="saveNote()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Note</button>
+            <input type="text" id="newNoteTitle" class="w-full border border-gray-300 rounded p-2 mb-3 focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" placeholder="Note Title (Optional)">
+            <textarea id="newNoteText" rows="4" class="w-full border border-gray-300 rounded p-2 mb-4 focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none" placeholder="Type your note here..."></textarea>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeNotesModal()" class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded hover:bg-gray-300 transition-colors">Cancel</button>
+                <button onclick="saveNote()" class="px-4 py-2 bg-acdiGreen text-white font-medium rounded hover:bg-acdiGreenHover transition-colors shadow">Save Note</button>
             </div>
         </div>
     </div>
@@ -97,7 +112,6 @@
     <script>
         let currentUser = null;
 
-        // Date Check Helper Function
         function checkDateFilter(dateStr, filterType) {
             if (!filterType) return true; 
             if (!dateStr) return false; 
@@ -118,14 +132,11 @@
             return true;
         }
 
-        // 1. Initialize Zoho SDK & Override for Testing
         ZOHO.embeddedApp.init().then(function() {
             ZOHO.CRM.CONFIG.getCurrentUser().then(async function(data){
                 currentUser = data.users[0];
-                
                 const loggedInName = currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`;
                 
-                // --- TEST OVERRIDE FOR DREW CHILTON ---
                 if (loggedInName.includes("Drew Chilton")) {
                     console.log("Test Mode: Drew Chilton detected. Fetching Chris McPheeters' ID...");
                     try {
@@ -134,7 +145,6 @@
                             (u.full_name && u.full_name.includes("Chris McPheeters")) || 
                             (u.first_name === "Chris" && u.last_name === "McPheeters")
                         );
-                        
                         if (chrisUser) {
                             currentUser = chrisUser;
                             console.log("Override successful.");
@@ -146,7 +156,6 @@
             });
         });
 
-        // 2. Fetch Data Flow
         async function fetchTasksAndPotentials() {
             const taskType = document.getElementById('taskTypeFilter').value;
             const taskDateFilter = document.getElementById('taskDateFilter').value;
@@ -154,18 +163,18 @@
             const tbody = document.getElementById('potentialsTableBody');
             
             if (!taskType) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Select a Task Type to load potentials.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 font-medium">Select a Task Type to load potentials.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-acdiGreen font-bold">Loading records...</td></tr>';
 
             try {
                 const taskQuery = `(Task_Type:equals:${taskType})`;
                 const tasksResponse = await ZOHO.CRM.API.searchRecord({Entity: "Tasks", Type: "criteria", Query: taskQuery});
                 
                 if (!tasksResponse.data || tasksResponse.data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No open tasks found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 font-medium">No open tasks found.</td></tr>';
                     return;
                 }
 
@@ -177,7 +186,7 @@
                 const potentialIds = relevantTasks.map(t => t.What_Id ? t.What_Id.id : null).filter(id => id !== null);
                 
                 if (potentialIds.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No potentials connected to these tasks.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 font-medium">No potentials connected to these tasks.</td></tr>';
                     return;
                 }
 
@@ -196,7 +205,7 @@
                 });
 
                 if (finalPotentials.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">No potentials match the filter.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 font-medium">No potentials match the filter.</td></tr>';
                     return;
                 }
 
@@ -204,19 +213,15 @@
 
             } catch (error) {
                 console.error("Error fetching data: ", error);
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">Error loading data.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-red-500 font-medium">Error loading data.</td></tr>';
             }
         }
 
-        // Custom Open Record Function without exposing Org ID
         function openPotential(recordId) {
-            // Using the absolute URL forces the browser to leave GitHub Pages.
-            // Zoho automatically routes the user to their specific Org ID behind the scenes.
             const url = `https://crm.zoho.com/crm/tab/Potentials/${recordId}`;
             window.open(url, '_blank');
         }
 
-        // 3. Render Table rows
         function renderPotentials(potentials) {
             const tbody = document.getElementById('potentialsTableBody');
             tbody.innerHTML = '';
@@ -230,24 +235,23 @@
                 const currentStage = pot.Stage || '';
                 const currentCat = pot.Deal_Category || '';
                 const closingDate = pot.Closing_Date || '';
-                // Ensure API name matches your CRM exactly (e.g., Remind_Date)
                 const remindDate = pot.Remind_Date || ''; 
 
                 const rowHtml = `
-                    <tr class="hover:bg-gray-50" id="row_${id}">
-                        <td class="px-4 py-3">
-                            <button onclick="openPotential('${id}')" class="text-blue-600 font-medium hover:underline text-left bg-transparent border-none cursor-pointer">${potName}</button>
+                    <tr class="hover:bg-blue-50 transition-colors" id="row_${id}">
+                        <td class="px-3 py-3 max-w-xs break-words">
+                            <button onclick="openPotential('${id}')" class="text-acdiGreen font-bold hover:underline text-left bg-transparent border-none cursor-pointer">${potName}</button>
                         </td>
-                        <td class="px-4 py-3">${ownerName}</td>
-                        <td class="px-4 py-3">${accountName}</td>
-                        <td class="px-4 py-3">${endUser}</td>
-                        <td class="px-4 py-3">${currentStage}</td>
-                        <td class="px-4 py-3">${currentCat}</td>
-                        <td class="px-4 py-3"><input type="date" id="date_${id}" value="${closingDate}" class="border border-gray-300 rounded p-1 text-sm"></td>
-                        <td class="px-4 py-3"><input type="date" id="remind_${id}" value="${remindDate}" class="border border-gray-300 rounded p-1 text-sm"></td>
-                        <td class="px-4 py-3 flex gap-2">
-                            <button onclick="updatePotential('${id}')" class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">Save</button>
-                            <button onclick="openNotesModal('${id}')" class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded border border-blue-300 hover:bg-blue-200">Add Note</button>
+                        <td class="px-3 py-3">${ownerName}</td>
+                        <td class="px-3 py-3 max-w-xs break-words">${accountName}</td>
+                        <td class="px-3 py-3 max-w-xs break-words">${endUser}</td>
+                        <td class="px-3 py-3 whitespace-nowrap">${currentStage}</td>
+                        <td class="px-3 py-3 whitespace-nowrap">${currentCat}</td>
+                        <td class="px-3 py-3 whitespace-nowrap"><input type="date" id="date_${id}" value="${closingDate}" class="border border-gray-300 rounded p-1 text-sm focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none"></td>
+                        <td class="px-3 py-3 whitespace-nowrap"><input type="date" id="remind_${id}" value="${remindDate}" class="border border-gray-300 rounded p-1 text-sm focus:border-acdiGreen focus:ring-1 focus:ring-acdiGreen outline-none"></td>
+                        <td class="px-3 py-3 whitespace-nowrap flex gap-2 justify-center">
+                            <button onclick="updatePotential('${id}')" class="px-3 py-1.5 bg-acdiGreen text-white font-medium text-xs rounded shadow hover:bg-acdiGreenHover transition-colors">Save</button>
+                            <button onclick="openNotesModal('${id}')" class="px-3 py-1.5 bg-white text-acdiDark font-medium text-xs rounded border border-gray-300 shadow-sm hover:border-acdiGreen hover:text-acdiGreen transition-colors">Add Note</button>
                         </td>
                     </tr>
                 `;
@@ -255,7 +259,6 @@
             });
         }
 
-        // 4. Update Potential Record (Inline Edit)
         async function updatePotential(recordId) {
             const newDate = document.getElementById(`date_${recordId}`).value;
             const newRemindDate = document.getElementById(`remind_${recordId}`).value;
@@ -265,7 +268,7 @@
                 APIData: {
                     "id": recordId,
                     "Closing_Date": newDate,
-                    "Remind_Date": newRemindDate // Verify this API name in your CRM Settings
+                    "Remind_Date": newRemindDate 
                 }
             };
 
@@ -280,7 +283,6 @@
             }
         }
 
-        // 5. Notes Modal Logic
         function openNotesModal(potentialId) {
             document.getElementById('modalPotentialId').value = potentialId;
             document.getElementById('newNoteTitle').value = '';
