@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>US/CAN Q4 2026 APC</title>
+
+  <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
+
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+
+    #dashboard {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+  <iframe
+    id="dashboard"
+    title="US/CAN Q4 2026 APC Analytics Dashboard"
+    src="https://analytics.zoho.com/open-view/1095920000088133350/6f72fc58ac1efcdae6f9df7a923df6ae4211b1fd37911606d80032deff4e4d16"
+    allowfullscreen>
+  </iframe>
+
+  <script>
+    if (
+      window.ZOHO &&
+      window.ZOHO.embeddedApp &&
+      typeof window.ZOHO.embeddedApp.init === "function"
+    ) {
+      window.ZOHO.embeddedApp.init().catch(function (error) {
+        console.warn("CRM widget initialization:", error);
+      });
+    }
+  </script>
+</body>
+</html>
