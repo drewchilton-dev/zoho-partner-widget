@@ -73,7 +73,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   const scanStatus = el("scan-status");
   const results = el("results");
   const preview = el("preview");
-  let objectUrl, order, result;
+  let objectUrl, previewId, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
 
   function paragraph(parent, text, tone = "") {
@@ -338,6 +338,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     ++scanRequest;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = undefined;
+    previewId = undefined;
     result = undefined;
     preview.replaceChildren();
     results.replaceChildren();
@@ -616,7 +617,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   }
 
   async function showAttachment(orderPath, id, name) {
+    if (previewId === id) return;
+    previewId = id;
     const request = ++fileRequest;
+    preview.replaceChildren();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = undefined;
     attachmentStatus.textContent = "Loading the CRM attachment preview…";
     try {
       const response = await zrc.get(orderPath + "/Attachments/" + id, { responseType: "blob" });
@@ -628,9 +634,62 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       if (request === fileRequest) attachmentStatus.textContent = name;
     } catch (error) {
       if (request === fileRequest) {
+        previewId = undefined;
         attachmentStatus.textContent = "CRM attachment preview unavailable (" + errorCode(error) + "). The OCR status is shown on the right.";
       }
     }
+  }
+
+  async function previewOrderAttachment(orderPath, request, poReference) {
+    try {
+      const response = await zrc.get(orderPath + "/Attachments", {
+        params: { fields: "id,File_Name", per_page: 200 }
+      });
+      if (request !== recordRequest || previewId) return;
+      if (![200, 204].includes(response.status)) {
+        throw Object.assign(new Error(), { status: response.status, details: response.data });
+      }
+      const files = (response.data?.data ?? []).filter(file =>
+        /^\d{10,25}$/.test(String(file.id)) && /\.(pdf|png|jpe?g)$/i.test(file.File_Name ?? ""));
+      const exact = poReference ? files.filter(file =>
+        key(file.File_Name.trim().replace(/\.[^.]+$/, "")) === poReference) : [];
+      const selected = !response.data?.info?.more_records
+        ? files.length === 1 ? files[0] : exact.length === 1 ? exact[0] : undefined
+        : undefined;
+      if (selected) {
+        void showAttachment(orderPath, String(selected.id), selected.File_Name);
+      } else {
+        attachmentStatus.textContent = files.length
+          ? "Multiple files are possible. Waiting for the scanner to identify the PO."
+          : "No supported file was returned by the CRM attachment list.";
+      }
+    } catch (error) {
+      if (request === recordRequest && !previewId) {
+        attachmentStatus.textContent = "CRM attachment list unavailable (" + errorCode(error) + ").";
+      }
+    }
+  }
+
+  function functionOutput(response) {
+    let value = response;
+    for (let depth = 0; depth < 6; depth++) {
+      if (typeof value === "string") {
+        if (!value.trim()) break;
+        try { value = JSON.parse(value); } catch { break; }
+      } else if (typeof value?.ok === "boolean") {
+        return value;
+      } else if (value && typeof value === "object") {
+        const next = value.details?.output ?? value.output ?? value.data ?? value.response;
+        if (next == null) {
+          if (value.code) throw new Error("Zoho function error (" + errorCode(value) + ").");
+          break;
+        }
+        value = next;
+      } else {
+        break;
+      }
+    }
+    throw new Error("No readable function output (" + errorCode(response) + "). Check the function API execution settings.");
   }
 
   async function runScan(orderPath, salesOrderId) {
@@ -642,17 +701,13 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         arguments: JSON.stringify({ salesOrderId })
       });
       if (request !== scanRequest) return;
-      const output = response?.details?.output ?? response?.data?.details?.output ?? response?.output;
-      if (output == null) throw new Error("No function output. Check the function API name and access.");
-      const data = typeof output === "string" ? JSON.parse(output) : output;
+      const data = functionOutput(response);
       if (String(data?.salesOrderId) === salesOrderId &&
           /^\d{10,25}$/.test(String(data?.attachmentId)) &&
           typeof data?.fileName === "string") {
         void showAttachment(orderPath, String(data.attachmentId), data.fileName);
       } else if (data?.ok) {
         throw new Error("Zoho returned an unverified attachment. Confirm the updated standalone code is saved.");
-      } else {
-        attachmentStatus.textContent = "No attachment selected.";
       }
       if (!data?.ok || typeof data.text !== "string") {
         throw new Error(data?.error || "Zoho OCR did not return text.");
@@ -663,16 +718,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     } catch (error) {
       if (request !== scanRequest) return;
       if (attachmentStatus.textContent === "Zoho is choosing the attachment…") {
-        attachmentStatus.textContent = "No attachment selected.";
+        attachmentStatus.textContent = "Waiting for the CRM attachment preview…";
       }
-      scanStatus.textContent = "Scan failed. " + (error?.message || "Check the function and its connection.");
+      const code = errorCode(error);
+      scanStatus.textContent = "Scan failed. " + (error instanceof Error && !error.code
+        ? error.message : "Zoho function error (" + code + ").");
     }
   }
 
   function errorCode(error) {
     const status = Number(error?.status || error?.response?.status || 0);
-    const candidate = error?.details?.code || error?.details?.data?.code
-      || error?.response?.data?.code || error?.name || "UNKNOWN";
+    const candidate = error?.code || error?.details?.code || error?.details?.data?.code
+      || error?.response?.data?.code || error?.data?.code || error?.name || "UNKNOWN";
     const code = /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(String(candidate)) ? candidate : "UNKNOWN";
     return [status || "no HTTP status", code].join(", ");
   }
@@ -706,6 +763,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       orderStatus.textContent = order.Subject || "Current Sales Order";
       renderResults();
       void runScan(path, String(id));
+      void previewOrderAttachment(path, request, key(order.Purchase_Order));
     } catch (error) {
       if (request === recordRequest) orderStatus.textContent = "Sales Order read failed (" + errorCode(error) + ").";
     }
