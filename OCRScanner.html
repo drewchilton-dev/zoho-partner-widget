@@ -640,20 +640,44 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     }
   }
 
-  async function previewOrderAttachment(orderPath, request, poReference) {
+  async function listOrderAttachments(orderPath) {
     try {
       const response = await zrc.get(orderPath + "/Attachments", {
         params: { fields: "id,File_Name", per_page: 200 }
       });
-      if (request !== recordRequest || previewId) return;
       if (![200, 204].includes(response.status)) {
         throw Object.assign(new Error(), { status: response.status, details: response.data });
       }
-      const files = (response.data?.data ?? []).filter(file =>
+      return response.data ?? {};
+    } catch (firstError) {
+      const api = window.ZOHO?.CRM?.API;
+      if (!api?.getRelatedRecords) throw firstError;
+      let fallback;
+      try {
+        fallback = await api.getRelatedRecords({
+          Entity: "Sales_Orders",
+          RecordID: orderPath.split("/").pop(),
+          RelatedList: "Attachments",
+          page: 1,
+          per_page: 200
+        });
+      } catch {
+        throw firstError;
+      }
+      if (!Array.isArray(fallback?.data)) throw firstError;
+      return fallback;
+    }
+  }
+
+  async function previewOrderAttachment(orderPath, request, poReference) {
+    try {
+      const attachments = await listOrderAttachments(orderPath);
+      if (request !== recordRequest || previewId) return;
+      const files = (attachments.data ?? []).filter(file =>
         /^\d{10,25}$/.test(String(file.id)) && /\.(pdf|png|jpe?g)$/i.test(file.File_Name ?? ""));
       const exact = poReference ? files.filter(file =>
         key(file.File_Name.trim().replace(/\.[^.]+$/, "")) === poReference) : [];
-      const selected = !response.data?.info?.more_records
+      const selected = !attachments.info?.more_records
         ? files.length === 1 ? files[0] : exact.length === 1 ? exact[0] : undefined
         : undefined;
       if (selected) {
