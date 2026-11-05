@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales Order PO Review</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #f4f6fa;
+      color: #182230;
+      font: 15px system-ui, sans-serif;
+    }
+    h1 { margin: 0; font-size: 24px; }
+    h2 { margin: 0; font-size: 18px; }
+    p { color: #526174; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    section {
+      min-height: 240px;
+      padding: 20px;
+      border: 1px solid #dce2eb;
+      border-radius: 12px;
+      background: white;
+    }
+    @media (max-width: 640px) {
+      main { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Sales Order PO Review</h1>
+  <p>Read-only review</p>
+  <main>
+    <section>
+      <h2>Original purchase order</h2>
+      <p>The selected Sales Order attachment will appear here.</p>
+    </section>
+    <section>
+      <h2>Sales Order comparison</h2>
+      <p>Account, billing, and shipping details will appear here.</p>
+    </section>
+  </main>
+</body>
+</html>
