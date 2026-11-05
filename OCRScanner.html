@@ -5,33 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sales Order PO Review</title>
 <style>
-*{box-sizing:border-box} body{margin:0;background:#f3f5fa;color:#182230;font:15px system-ui,sans-serif;padding:20px}
+:root {
+  --navy:#253238; --bright-navy:#365059; --lime:#8cc540; --oat:#f6f6f3;
+  --light-green:#c8df8e; --dark-green:#5b8419; --grey:#bdcbcd;
+  --light-teal:#88acb5; --dark-teal:#478191;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--oat);color:var(--navy);font:15px Barlow,system-ui,sans-serif;padding:20px}
+.masthead{padding:16px 20px;background:var(--navy);color:white;border-left:6px solid var(--lime);border-radius:8px}
+.masthead p{margin:4px 0 0;color:var(--light-green)}
 h1{margin:0;font-size:25px} h2{margin:0 0 12px;font-size:18px} h3{margin:18px 0 8px;font-size:16px}
-p{margin:8px 0} .muted{color:#526174} main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
-section{min-width:0;background:white;border:1px solid #dbe2ee;border-radius:12px;padding:16px}
-select,input,button{max-width:100%;font:inherit;margin:5px 0} select{width:100%;padding:6px}
-button{padding:7px 12px;color:white;background:#214d97;border:0;border-radius:6px;cursor:pointer} button:disabled{opacity:.45;cursor:default}
-iframe,img{width:100%;display:block;border:0;margin-top:8px} iframe{height:56vh;background:#f3f5fa}
-table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:7px;text-align:left;border-bottom:1px solid #e4e8f1;vertical-align:top;overflow-wrap:anywhere}
-.scroll{overflow:auto} .different{color:#9b3b0a} .match{color:#18613a} .review{color:#634b00} summary{cursor:pointer}
+p{margin:8px 0} .muted{color:var(--bright-navy)}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px;margin-top:16px;align-items:start}
+section{min-width:0;background:white;border:1px solid var(--grey);border-top:3px solid var(--lime);border-radius:8px;padding:16px}
+.document-panel{position:sticky;top:12px}
+a{color:var(--bright-navy);text-decoration-color:var(--dark-teal);text-underline-offset:3px}
+textarea{color:var(--navy);background:var(--oat);border:1px solid var(--grey);border-radius:4px;padding:8px}
+iframe,img{width:100%;display:block;border:0;margin-top:8px} iframe{height:65vh;background:var(--oat)}
+table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px}
+td{width:50%;padding:9px 12px;text-align:left;border-bottom:1px solid var(--grey);vertical-align:top;overflow-wrap:anywhere}
+td+td{border-left:1px solid var(--grey)}
+.column-headings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:var(--navy);color:white;border-radius:6px;overflow:hidden}
+.column-headings h2{margin:0;padding:11px 12px;font-size:16px}
+.column-headings h2+h2{border-left:1px solid var(--light-teal)}
+.field-label{display:block;color:var(--bright-navy);font-size:12px;font-weight:700;margin-bottom:2px}
+.comparison-group{margin:16px 0}
+.comparison-group h3{background:var(--oat);border-left:3px solid var(--lime);margin:0;padding:8px 10px}
+.crm-differs{background:#fde8e7;box-shadow:inset 3px 0 #b42318}
+.crm-review{background:#f1f5e6}
+.field-status{display:block;font-size:12px;font-weight:700;margin-top:3px}
+.crm-differs .field-status{color:#8f1f17}
+.crm-review .field-status{color:var(--bright-navy)}
+.evidence{margin:8px 0 0;font-size:13px}
+.review{background:var(--light-green);color:var(--navy);padding:6px 9px;border-left:3px solid var(--dark-green)}
+summary{cursor:pointer;color:var(--bright-navy)}
 pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
-@media(max-width:740px){main{grid-template-columns:1fr}}
+@media(max-width:740px){main{grid-template-columns:1fr}.document-panel{position:static}}
 </style>
 </head>
 <body>
+<header class="masthead">
 <h1>Sales Order PO Review</h1>
-<p class="muted">Read-only comparison · Zoho OCR · Auto-scan</p>
+<p>Read-only comparison · Zoho OCR · Auto-scan</p>
+</header>
 <main>
-<section>
+<section class="document-panel">
 <h2>Original purchase order</h2>
 <p id="attachment-status" role="status">Waiting for Zoho…</p>
-<select id="attachments" aria-label="Purchase order attachment" hidden></select>
 <div id="preview"></div>
 </section>
 <section>
-<h2>Sales Order comparison</h2>
+<div class="column-headings">
+<h2>Purchase Order fields</h2>
+<h2>CRM Sales Order fields</h2>
+</div>
 <p id="order-status" role="status">Waiting for Zoho…</p>
-<div id="order-details"></div>
 <p id="scan-status" role="status">Waiting for the Sales Order attachment…</p>
 <div id="results"></div>
 </section>
@@ -44,9 +72,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   const orderStatus = el("order-status");
   const scanStatus = el("scan-status");
   const results = el("results");
-  const picker = el("attachments");
   const preview = el("preview");
-  let selectedAttachment, objectUrl, order, result;
+  let objectUrl, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
 
   function paragraph(parent, text, tone = "") {
@@ -62,24 +89,33 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     parent.append(heading);
   }
 
-  function table(parent, headers, rows) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "scroll";
+  function comparisonGroup(name, rows) {
+    const group = document.createElement("div");
+    group.className = "comparison-group";
+    title(group, name);
     const grid = document.createElement("table");
-    const header = grid.createTHead().insertRow();
-    for (const label of headers) {
-      const cell = document.createElement("th");
-      cell.scope = "col";
-      cell.textContent = label;
-      header.append(cell);
-    }
+    grid.setAttribute("aria-label", name + " · Purchase Order and CRM comparison");
     const body = grid.createTBody();
-    for (const row of rows) {
-      const tr = body.insertRow();
-      for (const value of row) tr.insertCell().textContent = value ?? "—";
+    for (const [label, poValue, crmValue, status] of rows) {
+      const row = body.insertRow();
+      for (const [column, value] of [poValue, crmValue].entries()) {
+        const cell = row.insertCell();
+        const caption = document.createElement("span");
+        caption.className = "field-label";
+        caption.textContent = label;
+        cell.append(caption, document.createTextNode(value == null || value === "" ? "—" : String(value)));
+        if (column !== 1 || !status || status === "Match" || status === "CRM only") continue;
+        cell.className = ["Differs", "CRM blank", "No matching CRM product"].includes(status)
+          ? "crm-differs" : "crm-review";
+        const badge = document.createElement("span");
+        badge.className = "field-status";
+        badge.textContent = status;
+        cell.append(badge);
+      }
     }
-    wrapper.append(grid);
-    parent.append(wrapper);
+    group.append(grid);
+    results.append(group);
+    return group;
   }
 
   const key = value => String(value ?? "").trim().toUpperCase();
@@ -123,107 +159,37 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       country: order?.[prefix + "_Country"] ?? order?.[prefix + "Country"]
     };
   }
-  function displayOrder() {
-    const target = el("order-details");
-    target.replaceChildren();
-    if (!order) return;
-    const fields = [
-      ["Account", order.Account_Name?.name], ["Bill To Account", order.Bill_to_Account?.name],
-      ["Ship To Account", order.Ship_to_Account?.name], ["End User Account", order.Existing_End_User_Account?.name],
-      ["Billing address", Object.values(crmAddress("Billing")).filter(Boolean).join(", ")],
-      ["Shipping address", Object.values(crmAddress("Shipping")).filter(Boolean).join(", ")]
-    ];
-    const details = document.createElement("details");
-    const summary = document.createElement("summary");
-    summary.textContent = "Current CRM fields";
-    details.append(summary);
-    table(details, ["Field", "Sales Order"], fields);
-    target.append(details);
-
-    const exportPanel = document.createElement("details");
-    const exportLabel = document.createElement("summary");
-    exportLabel.textContent = "Show API field JSON for troubleshooting";
-    exportPanel.append(exportLabel);
-    const shape = order.Ordered_Items ?? order.Product_Details;
-    const examples = Array.isArray(shape) ? shape.slice(0, 3).map(line => {
-      const example = {};
-      for (const [field, value] of Object.entries(line)) {
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-          example[field] = Object.fromEntries(Object.keys(value).map(nested => [
-            nested, nested === "name" && ["Product_Name", "product"].includes(field)
-              ? value[nested] : "[redacted]"
-          ]));
-        } else {
-          const safeField = /^(?:quantity|list_price|unit_price|total|total_after_discount|net_total|discount|discount_percent|tax)$/i.test(field);
-          example[field] = value === null ? null : safeField && typeof value === "number"
-            ? value : typeof value === "string" && safeField && /^-?\d+(?:\.\d+)?$/.test(value)
-              ? value : "[redacted]";
-        }
-      }
-      return example;
-    }) : [];
-    const report = {
-      record_keys: Object.keys(order).sort(),
-      populated_record_keys: Object.keys(order).filter(field =>
-        order[field] !== null && order[field] !== undefined && order[field] !== ""
-      ).sort(),
-      order_totals: Object.fromEntries(
-        ["Currency", "SubTotal", "Sub_Total", "Discounts", "Discount", "Tax",
-          "Shipping_Charge", "Adjustment", "Grand_Total"]
-          .filter(field => typeof order[field] === "number" ||
-            (field === "Currency" && /^[A-Z]{3}$/.test(order[field])))
-          .map(field => [field, order[field]])
-      ),
-      line_item_key: Array.isArray(order.Ordered_Items) ? "Ordered_Items"
-        : Array.isArray(order.Product_Details) ? "Product_Details" : null,
-      line_item_count: Array.isArray(shape) ? shape.length : null,
-      more_ordered_items: order.$has_more?.Ordered_Items ?? null,
-      line_examples: examples
-    };
-    const json = document.createElement("textarea");
-    json.readOnly = true;
-    json.rows = 12;
-    json.style.width = "100%";
-    json.setAttribute("aria-label", "Sales Order API field JSON");
-    json.value = JSON.stringify(report, null, 2);
-    paragraph(exportPanel, "Copy this JSON to share API names and up to three example line items. Record IDs and customer values are omitted. Review product names and prices before sharing.");
-    exportPanel.append(json);
-    target.append(exportPanel);
-  }
-
   function showAddress(role, prefix) {
-    title(results, prefix);
-    const entry = result[role];
-    const po = entry.address;
+    const entry = result?.[role];
+    const po = entry?.address;
     const crm = crmAddress(prefix);
     const account = order?.[role === "billing" ? "Bill_to_Account" : "Ship_to_Account"]?.name;
     const fields = [
-      ["Company", po?.name, account, normalized],
+      ["Company / account", po?.name, account, normalized],
       ["Street", po?.street, crm.street, streetKey],
       ["City / region", po?.city_region, crm.city, cityKey],
       ["Postal code", po?.postal_code, crm.zip, zipKey],
       ["Country", po?.country_as_printed, crm.country, countryKey]
     ];
-    table(results, ["Field", "PO", "Sales Order", "Check"], fields.map(
-      ([name, left, right, normalize]) => [
-        name, left || "—", right || "—",
-        !left ? "Needs review" : !order ? "PO only" : !right ? "CRM blank"
-          : normalize(left) === normalize(right) ? "Match"
-          : name === "Company" ? "Verify account name" : "Differs"
-      ]
-    ));
-    if (entry.evidence.length) {
+    const group = comparisonGroup(prefix, fields.map(([name, left, right, normalize]) => [
+      name, left, right,
+      !result ? "" : !left ? "Needs review" : !right ? "CRM blank"
+        : normalize(left) === normalize(right) ? "Match"
+        : name === "Company / account" ? "Verify account name" : "Differs"
+    ]));
+    if (entry?.evidence.length) {
       const details = document.createElement("details");
+      details.className = "evidence";
       const label = document.createElement("summary");
       label.textContent = "PO evidence";
       details.append(label);
       for (const evidence of entry.evidence) {
-        paragraph(details, evidence.page ? "Page " + evidence.page + " · " + evidence.label : evidence.label);
+        paragraph(details, evidence.label);
         const block = document.createElement("pre");
         block.textContent = evidence.source_lines.join("\n");
         details.append(block);
       }
-      results.append(details);
+      group.append(details);
     }
   }
 
@@ -253,114 +219,125 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     return null;
   }
   function renderItems() {
-    title(results, "Products and line items");
-    paragraph(results, "Matches use the printed supplier SKU and CRM Product Name or SKU-style Product Code.", "muted");
     const current = crmItems();
     const complete = current && !order?.$has_more?.Ordered_Items;
-    if (!current) paragraph(results, "CRM line items unavailable in this view.", "review");
-    else if (!complete) paragraph(results, "CRM returned a partial line-item list.", "review");
-
-    const pairs = result.items.map(item => {
-      const names = new Set([item.sku, ...item.catalog_candidates].map(key).filter(Boolean));
-      return current?.map((line, index) => {
-        const code = key(line.code);
-        const skuLike = /^[A-Z0-9][A-Z0-9._/-]*$/.test(code);
-        return names.has(key(line.name)) || (skuLike && names.has(code)) ? index : -1;
-      })
-        .filter(index => index >= 0) || [];
+    const items = result?.items ?? [];
+    const matches = items.map(item => {
+      const sku = key(item.sku);
+      return current?.map((line, index) => sku &&
+        [line.name, line.code].some(value => key(value) === sku) ? index : -1)
+        .filter(index => index >= 0) ?? [];
     });
     const counts = new Map();
-    for (const matches of pairs) for (const index of matches) counts.set(index, (counts.get(index) || 0) + 1);
-
-    const rows = result.items.map((item, i) => {
-      const matches = pairs[i];
-      const index = matches[0];
-      const duplicate = matches.length > 1 || counts.get(index) > 1;
-      const line = matches.length === 1 && !duplicate ? current[index] : undefined;
-      const qty = line ? numericCheck(item.quantity, line.qty) : "—";
-      const price = line ? numericCheck(item.unit_price, line.price) : "—";
-      const amount = line ? numericCheck(item.amount, line.amount) : "—";
-      const discount = line && decimal(item.discount_percent) !== null &&
-        decimal(item.unit_price) !== null && decimal(item.quantity) !== null
-        ? numericCheck(Math.round(decimal(item.unit_price) * decimal(item.quantity) *
-          decimal(item.discount_percent)) / 100, line.discount) : null;
-      let status = !current ? "PO only" : !item.sku || duplicate || !item.arithmetic_ok ? "Needs review"
-        : !line ? (complete ? "No matching CRM product" : "Needs review")
-        : [qty, price, amount, discount].includes("Differs") ? "Differs"
-        : [qty, price, amount, discount].includes("Needs review") ? "Needs review" : "Match";
-      const sku = [item.sku, item.buyer_code && item.buyer_code !== item.sku ? "Buyer: " + item.buyer_code : ""].filter(Boolean).join(" · ");
-      return [
-        item.line, sku || "—", line?.name || item.catalog_candidates.join(" / ") || "—",
-        (item.quantity ?? "—") + " / " + (line?.qty ?? "—"),
-        (item.unit_price ?? "—") + " / " + (line?.price ?? "—"),
-        (item.amount ?? "—") + " / " + (line?.amount ?? "—"),
-        (item.discount_percent == null ? "—" : item.discount_percent + "%") + " / " + (line?.discount ?? "—"),
-        line?.net ?? "—", status
+    for (const pair of matches) {
+      for (const index of pair) counts.set(index, (counts.get(index) || 0) + 1);
+    }
+    for (const [i, item] of items.entries()) {
+      const pair = matches[i];
+      const index = pair[0];
+      const duplicate = pair.length > 1 || counts.get(index) > 1;
+      const line = pair.length === 1 && !duplicate ? current[index] : undefined;
+      const sku = key(item.sku);
+      const similar = !pair.length && sku.length >= 6 && current
+        ? [...new Set(current.filter(candidate => [candidate.name, candidate.code].some(value => {
+          const code = key(value);
+          return code.length === sku.length && /^[A-Z0-9._/-]+$/.test(code) &&
+            [...sku].filter((char, pos) => char !== code[pos]).length === 1;
+        })).map(candidate => candidate.name).filter(Boolean))]
+        : [];
+      const productStatus = !sku || duplicate ? "Needs review"
+        : line ? "Match" : similar.length === 1 ? "Possible OCR misread · verify SKU"
+        : complete && item.arithmetic_ok ? "No matching CRM product" : "Needs review";
+      const check = (poValue, crmValue) =>
+        line && item.arithmetic_ok ? numericCheck(poValue, crmValue) : "Needs review";
+      const discount = decimal(item.discount_percent) === null || !item.arithmetic_ok ? null
+        : Math.round(Number(item.unit_price) * Number(item.quantity) * Number(item.discount_percent)) / 100;
+      const rows = [
+        ["Supplier SKU / product", item.sku, line?.name ?? (similar.length === 1 ? similar[0] : null), productStatus],
+        ["Quantity", item.quantity, line?.qty, check(item.quantity, line?.qty)],
+        ["Unit price", item.unit_price, line?.price, check(item.unit_price, line?.price)],
+        ["Line amount", item.amount, line?.amount, check(item.amount, line?.amount)]
       ];
-    });
-
-    if (complete && result.items.length) {
-      current.forEach((line, index) => {
-        if (!counts.has(index)) rows.push(["—", "—", line.name, "— / " + (line.qty ?? "—"),
-          "— / " + (line.price ?? "—"), "— / " + (line.amount ?? "—"),
-          "— / " + (line.discount ?? "—"), line.net ?? "—", "No matching PO item read"]);
-      });
-    }
-    if (rows.length) table(results, ["Line", "PO SKU", "Product", "Qty PO / CRM",
-      "Unit price PO / CRM", "Amount PO / CRM", "Discount PO % / CRM amount", "CRM net", "Check"], rows);
-    for (const warning of result.warnings) paragraph(results, warning, "review");
-    if (result.items.length) {
-      const evidence = document.createElement("details");
+      if (item.buyer_code) rows.splice(1, 0, ["Buyer item code", item.buyer_code, null, ""]);
+      if (item.discount_percent != null || line?.discount != null) {
+        rows.push(["Discount (PO % / CRM amount)", item.discount_percent == null ? null : item.discount_percent + "%",
+          line?.discount, check(discount, line?.discount)]);
+      }
+      if (line?.net != null) rows.push(["Net total", null, line.net, "CRM only"]);
+      const group = comparisonGroup("Product line " + item.line, rows);
+      const details = document.createElement("details");
+      details.className = "evidence";
       const summary = document.createElement("summary");
-      summary.textContent = "Printed item rows";
-      evidence.append(summary);
-      for (const item of result.items) paragraph(evidence, item.page ? "Page " + item.page + " · " + item.source : item.source);
-      results.append(evidence);
+      summary.textContent = "Printed PO row";
+      details.append(summary);
+      paragraph(details, item.source);
+      group.append(details);
     }
+    if (current) {
+      current.forEach((line, index) => {
+        if (counts.has(index)) return;
+        const status = result ? "No matching PO item read" : "";
+        comparisonGroup("CRM product line " + (index + 1), [
+          ["Supplier SKU / product", null, line.name, status],
+          ["Quantity", null, line.qty, ""],
+          ["Unit price", null, line.price, ""],
+          ["Line amount", null, line.amount, ""]
+        ]);
+      });
+      if (!complete) paragraph(results, "CRM returned a partial product list.", "review");
+    } else {
+      paragraph(results, "CRM product lines are unavailable in this view.", "review");
+    }
+    for (const warning of result?.warnings ?? []) paragraph(results, warning, "review");
   }
 
   function renderResults() {
     results.replaceChildren();
-    if (!result) return;
-    if (result.po_numbers.length === 1 && order?.Purchase_Order &&
-        key(result.po_numbers[0]) !== key(order.Purchase_Order)) {
-      paragraph(results, "The printed PO number differs from the Sales Order PO reference. Verify the selected document.", "review");
+    if (!order) return;
+    const poNumbers = result?.po_numbers ?? [];
+    const po = poNumbers.length === 1 ? poNumbers[0] : "";
+    const crmPo = order.Purchase_Order;
+    const crmCurrency = order.Currency;
+    const poCurrency = result?.amounts.total?.currency;
+    const rows = [
+      ["PO number", poNumbers.join(" / "), crmPo,
+        !result ? "" : !po ? "Needs review" : !crmPo ? "CRM blank"
+          : key(po) === key(crmPo) ? "Match" : "Differs"],
+      ["Currency", poCurrency, crmCurrency,
+        !result ? "" : !poCurrency ? "Needs review" : !crmCurrency ? "CRM blank"
+          : key(poCurrency) === key(crmCurrency) ? "Match" : "Differs"]
+    ];
+    for (const [label, field, current] of [
+      ["Subtotal", "subtotal", order.SubTotal ?? order.Sub_Total],
+      ["Tax", "tax", order.Tax],
+      ["Freight", "freight", order.Shipping_Charge],
+      ["Total", "total", order.Grand_Total]
+    ]) {
+      const amount = result?.amounts[field];
+      const comparable = amount && !amount.ambiguous && !(amount.currency && crmCurrency && amount.currency !== crmCurrency);
+      rows.push([label, amount?.value, current, !result ? "" : !comparable ? "Needs review"
+        : current == null || current === "" ? "CRM blank" : numericCheck(amount.value, current)]);
     }
+    if ((order.Discounts ?? order.Discount) != null) rows.push(["Order discounts", null, order.Discounts ?? order.Discount, "CRM only"]);
+    comparisonGroup("PO reference and totals", rows);
+
+    comparisonGroup("Sales Order accounts", [
+      ["Account", null, order.Account_Name?.name, "CRM only"],
+      ["End user account", null, order.Existing_End_User_Account?.name, "CRM only"]
+    ]);
     showAddress("billing", "Billing");
     showAddress("shipping", "Shipping");
-    if (result.invoice_routing.length) {
-      paragraph(results, "Invoice routing shown on the PO · " +
+    if (result?.invoice_routing.length) {
+      paragraph(results, "Invoice routing on the PO · " +
         result.invoice_routing.flatMap(item => item.source_lines).join(" · "), "muted");
     }
     renderItems();
-    title(results, "PO reference and totals");
-    const po = result.po_numbers.length === 1 ? result.po_numbers[0] : "";
-    const crmPo = order?.Purchase_Order;
-    const crmCurrency = order?.Currency;
-    const rows = [["PO number", result.po_numbers.join(" / ") || "—", crmPo || "—",
-      !po || !crmPo ? "Needs review" : key(po) === key(crmPo) ? "Match" : "Differs"]];
-    for (const [label, k, current] of [
-      ["Subtotal", "subtotal", order?.SubTotal ?? order?.Sub_Total],
-      ["Tax", "tax", order?.Tax],
-      ["Freight", "freight", order?.Shipping_Charge],
-      ["Total", "total", order?.Grand_Total]
-    ]) {
-      const amount = result.amounts[k];
-      const comparable = amount && !amount.ambiguous && !(amount.currency && crmCurrency && amount.currency !== crmCurrency);
-      rows.push([label, amount ? [amount.currency, amount.value].filter(Boolean).join(" ") : "—",
-        current ?? "—", comparable ? numericCheck(amount.value, current) : "Needs review"]);
-    }
-    if (order && (order.Discounts ?? order.Discount) != null) {
-      rows.push(["Order discounts", "—", order.Discounts ?? order.Discount, "CRM value"]);
-    }
-    table(results, ["Field", "PO", "Sales Order", "Check"], rows);
   }
 
   function clearFile() {
     ++scanRequest;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = undefined;
-    selectedAttachment = undefined;
     result = undefined;
     preview.replaceChildren();
     results.replaceChildren();
@@ -383,7 +360,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const viewer = document.createElement(mime === "application/pdf" ? "iframe" : "img");
     viewer.title = "Original purchase order";
     if (viewer.tagName === "IMG") viewer.alt = "Original purchase order";
-    viewer.src = objectUrl;
+    viewer.src = mime === "application/pdf"
+      ? objectUrl + "#toolbar=0&navpanes=0&view=FitH"
+      : objectUrl;
     preview.append(open, viewer);
   }
 
@@ -444,6 +423,56 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       }
     }
 
+    // This form's OCR can read the sold-to and ship-to columns in one stream.
+    const bilingualForm = /BON DE COMMANDE/i.test(text) &&
+      /Supplier Nbr\s*\/\s*N[°ºo]/i.test(text) && /Bill To\s*\/\s*Facturer/i.test(text);
+    if (bilingualForm) {
+      const canadianPostal = /^(?<place>.+?)\s+(?<zip>[A-Z]\d[A-Z]\s?\d[A-Z]\d)(?:\s+CANADA)?$/i;
+      function canadianBlocks(section) {
+        const candidates = [];
+        let block = [];
+        for (const value of section.split("\n").map(line => line.trim()).filter(Boolean)) {
+          const match = value.match(canadianPostal)?.groups;
+          if (match) {
+            const streetIndex = block.findLastIndex(line => street.test(line));
+            const names = block.slice(0, streetIndex)
+              .filter(line => !/^(?:ATTN\b|ATTENTION\b)/i.test(line));
+            if (streetIndex > 0 && names.length) {
+              candidates.push({
+                page: null, source_lines: [...block, value],
+                address: {
+                  name: /\bBUSINESS SOLUTIONS\b/i.test(names[1] || "") ? names.slice(0, 2).join(" ") : names[0],
+                  street: [block[streetIndex], ...block.slice(streetIndex + 1).filter(line => unit.test(line))].join(", "),
+                  city_region: match.place.replace(/[, ]+$/, ""),
+                  postal_code: match.zip,
+                  country_as_printed: /\sCANADA$/i.test(value) ? "Canada" : null
+                }
+              });
+            }
+            block = [];
+          } else if (/^(USA|UNITED STATES|CANADA)$/i.test(value) || postal.test(value)) {
+            block = [];
+          } else {
+            block.push(value);
+          }
+        }
+        return candidates;
+      }
+      const shippingSection = text.match(/Ship To\s*\/\s*Exp[ée]dier\s+[àa]\s*:\s*([\s\S]*?)Supplier Nbr\s*\//i)?.[1];
+      const billingSection = text.match(/Bill To\s*\/\s*Facturer\s+[àa]\s*:\s*([\s\S]*?)(?:\nTerms\s*\/|\nLine Nbr\s*\/)/i)?.[1];
+      // Apply the flattened form rules only when the specific merged-column layout is present.
+      if (shippingSection && billingSection && canadianBlocks(shippingSection).length > 1) {
+        const bill = canadianBlocks(billingSection);
+        const signature = item => streetKey(item.address.street) + "|" + zipKey(item.address.postal_code);
+        const repeatedBilling = bill.length === 1 ? signature(bill[0]) : null;
+        const ship = repeatedBilling ? canadianBlocks(shippingSection)
+          .filter(item => signature(item) !== repeatedBilling) : [];
+        evidence.billing = bill.map(item => ({ ...item, label: "Bill To / Facturer à" }));
+        evidence.shipping = ship.map(item => ({ ...item, label: "Ship To / Expédier à" }));
+        if (bill.length !== 1 || ship.length !== 1) warnings.push("The bilingual address columns could not be separated confidently.");
+      }
+    }
+
     const output = { invoice_routing: evidence.invoice_routing, catalog_loaded: false };
     for (const role of ["billing", "shipping"]) {
       const found = [...new Map(evidence[role].filter(entry => entry.address)
@@ -460,6 +489,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       ")\\s*(?:" + units + ")?\\s+(?:(?<discount>" + numberPattern + ")%\\s+)?\\$?(?<amount>" + money + ")\\s*$", "i");
     const xeroxTail = new RegExp("\\s+" + units + "\\s+(?<qty>" + numberPattern +
       ")\\s+(?:[A-Z][A-Z0-9-]+\\s+)?\\$?(?<price>" + money + ")\\s+\\$?(?<amount>" + money + ")\\s*$", "i");
+    const imageTechTail = new RegExp("\\s+(?<qty>" + numberPattern + ")\\s*(?:EA|EACH|A)?\\s+\\$?(?<price>" +
+      money + ")\\s+(?:0(?:[.]0+)?%?\\s+)?\\$?(?<amount>" + money + ")\\s*$", "i");
     const totalPattern = new RegExp("\\b(?<label>total\\s+purchase\\s+order|grand\\s+total|total\\s+amount|" +
       "po\\s+total(?:\\s*/\\s*totale?\\s+du)?|sub\\s*total|freight|shipping\\s+charge|sales\\s+tax|tax(?:\\s*/\\s*taxe)?|total)" +
       "\\s*:?\\s*(?<currency>USD|CAD)?\\s*\\$?\\s*(?<value>" + money + ")\\s*$", "i");
@@ -467,6 +498,17 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const poNumber = /\b(?:purchase\s+order\s*(?:no\.?|number|#)?|order\s+number)\s*:?\s+(?<value>[A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*)\b/i;
     const skuPattern = /^[A-Z0-9][A-Z0-9._/-]*$/i;
     const amounts = {}, items = [], poNumbers = new Set();
+    const imageTechForm = /\bBP\s+Catalog\b/i.test(text) && /\bQuantity\s+UoM\b/i.test(text);
+    if (imageTechForm) {
+      const header = lines.findIndex(line => /PURCHASE ORDER/i.test(line));
+      const next = lines.slice(header + 1, header + 5);
+      const number = next.map(line => line.match(/\b(\d{5,})\s+\d{1,2}\/\d{1,2}\/\d{4}\b/)?.[1]).find(Boolean);
+      if (number) poNumbers.add(number);
+    }
+    if (bilingualForm) {
+      const headerId = text.match(/(?:^|\n)\s*(\d{5,})\s*PURCHASE ORDER\s*\/\s*BON DE COMMANDE\b/i)?.[1];
+      if (headerId) poNumbers.add(headerId);
+    }
     let layout, previous, pendingTotal = false;
     function addAmount(label, value, currency) {
       const key = label.toLowerCase().replace(/\s/g, "");
@@ -487,13 +529,22 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       if (printedTotal) addAmount(printedTotal.label, printedTotal.value, printedTotal.currency);
       if (separateTotal) addAmount("total", separateTotal.value, separateTotal.currency);
       const upper = line.toUpperCase();
+      if (imageTechForm && /BP\s+CATALOG/.test(upper) && /QUANTITY/.test(upper) && /PRICE/.test(upper)) {
+        layout = "imageTech"; previous = null; continue;
+      }
       if (upper.includes("LINE ITEM DETAILS") || /SUPPLIER.*BUYER PART.*QTY/.test(upper)) { layout = "konica"; previous = null; continue; }
-      if (/SUPPLIER PART/.test(upper) && /ITEM NBR|QTY/.test(upper) && /PRICE|PRIX/.test(upper)) { layout = "bilingual"; previous = null; continue; }
+      if ((/SUPPLIER PART/.test(upper) && /ITEM NBR|QTY/.test(upper) && /PRICE|PRIX/.test(upper)) ||
+          (bilingualForm && /FOURNISSEUR\s+DUE\s*\/.*QTY\s*\/.*PRICE\s*\/\s*PRIX/.test(upper))) {
+        layout = "bilingual"; previous = null; continue;
+      }
       if (/ITEM DESCRIPTION/.test(upper) && /EXTENSION/.test(upper) && /QUANTITY/.test(upper)) { layout = "xerox"; previous = null; continue; }
       if (/\bITEM\b/.test(upper) && /\b(?:QTY|QUANTITY)\b/.test(upper) && /PRICE/.test(upper)) { layout = "standard"; previous = null; continue; }
       if (printedTotal || /^(TERMS AND CONDITIONS|SIGNATURE)/.test(upper)) { layout = null; previous = null; continue; }
       if (!layout) continue;
-      const row = line.match(/^(?<line>\d{1,6})\s+(?<body>.+)$/)?.groups;
+      const numbered = line.match(/^(?<line>\d{1,6})\s+(?<body>.+)$/)?.groups;
+      const row = layout === "imageTech"
+        ? { line: numbered?.line || String(items.length + 1), body: (numbered?.body || line).replace(/^Vendor Number\s+/i, "") }
+        : numbered;
       if (!row) {
         if (layout === "xerox" && previous && skuPattern.test(line)) {
           const half = line.slice(0, line.length / 2);
@@ -504,7 +555,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         }
         continue;
       }
-      const values = row.body.match(layout === "xerox" ? xeroxTail : tail);
+      const values = row.body.match(layout === "xerox" ? xeroxTail : layout === "imageTech" ? imageTechTail : tail);
+      if (layout === "xerox" && !values && !/^\d{3,}\s+\d{2,}[A-Z]\d+/i.test(line)) continue;
+      if (layout === "imageTech" && (!values || !/^[A-Z0-9]+(?:[-._][A-Z0-9]+)+\s/i.test(row.body))) continue;
       const prefix = (values ? row.body.slice(0, values.index) : row.body).trim();
       const cells = prefix.split(/ {2,}/);
       let sku = cells[0]?.split(/\s+/)[0], buyer = null;
@@ -512,9 +565,10 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         buyer = cells.length >= 3 ? cells.at(-1) : null;
         sku = cells.length >= 3 ? cells.at(-2) : null;
       } else if (layout === "bilingual") {
-        buyer = sku;
+        const codes = prefix.match(/^(\S+)\s+(\S+)\s+\d{1,2}\/\d{1,2}\/\d{2,4}$/);
+        buyer = codes?.[1] ?? sku;
         const rest = cells.slice(1).filter(value => !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(value));
-        sku = rest.at(-1) || null;
+        sku = codes?.[2] ?? rest.at(-1) ?? null;
       } else if (layout === "xerox") {
         buyer = sku;
         sku = null;
@@ -542,70 +596,76 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       }
     }
     if (!items.length) warnings.push("No item rows could be read confidently. Check the original PO.");
+    if (bilingualForm && items.length && items.every(item => item.arithmetic_ok)) {
+      const reorderedTotals = text.match(new RegExp(
+        "(?:^|\\n)[ \\t]*(" + money + ")[ \\t]*\\n[ \\t]*(" + money +
+        ")[ \\t]*\\n[ \\t]*Tax\\s*/\\s*Taxe[ \\t]*\\n[ \\t]*PO Total\\s*/", "i"));
+      if (reorderedTotals) {
+        const tax = Number(decimal(reorderedTotals[1]));
+        const total = Number(decimal(reorderedTotals[2]));
+        const subtotal = items.reduce((sum, item) => sum + Number(item.amount), 0);
+        if (Math.abs(subtotal + tax - total) <= 0.011) {
+          const currency = text.match(/Currency\s*\/\s*Argent\s*:\s*(USD|CAD)/i)?.[1];
+          addAmount("tax", reorderedTotals[1], currency);
+          addAmount("total", reorderedTotals[2], currency);
+        } else warnings.push("The separated tax and total values do not reconcile with the extracted lines.");
+      }
+    }
     if (lines.filter(line => line.trim()).length < 3) warnings.push("Zoho returned little or no line structure. Check the original PO.");
     return { ...output, items, amounts, po_numbers: [...poNumbers], warnings };
   }
 
-  async function scanWithModel(salesOrderId, attachmentId, ocrMode) {
-      const response = await window.ZOHO.CRM.FUNCTIONS.execute("scan_sales_order_po", {
-        arguments: JSON.stringify({ salesOrderId, attachmentId, ocrMode })
-      });
-      const output = response?.details?.output ?? response?.data?.details?.output ?? response?.output;
-      if (output == null) {
-        const rawCode = String(response?.code ?? "NO_OUTPUT");
-        const code = /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(rawCode) ? rawCode : "NO_OUTPUT";
-        throw new Error("The Zoho function returned no result (" + code + "). Check the function API name and access.");
+  async function showAttachment(orderPath, id, name) {
+    const request = ++fileRequest;
+    attachmentStatus.textContent = "Loading the CRM attachment preview…";
+    try {
+      const response = await zrc.get(orderPath + "/Attachments/" + id, { responseType: "blob" });
+      if (request !== fileRequest) return;
+      if (response.status !== 200 || !(response.data instanceof Blob)) {
+        throw Object.assign(new Error("File download failed."), { status: response.status });
       }
-      let data;
-      try {
-        data = typeof output === "string" ? JSON.parse(output) : output;
-      } catch {
-        throw new Error("The Zoho function returned an unreadable result.");
+      await selectFile(response.data, name, request);
+      if (request === fileRequest) attachmentStatus.textContent = name;
+    } catch (error) {
+      if (request === fileRequest) {
+        attachmentStatus.textContent = "CRM attachment preview unavailable (" + errorCode(error) + "). The OCR status is shown on the right.";
+      }
+    }
+  }
+
+  async function runScan(orderPath, salesOrderId) {
+    const request = ++scanRequest;
+    scanStatus.textContent = "Zoho is finding and reading the PO…";
+    attachmentStatus.textContent = "Zoho is choosing the attachment…";
+    try {
+      const response = await window.ZOHO.CRM.FUNCTIONS.execute("scan_sales_order_po", {
+        arguments: JSON.stringify({ salesOrderId })
+      });
+      if (request !== scanRequest) return;
+      const output = response?.details?.output ?? response?.data?.details?.output ?? response?.output;
+      if (output == null) throw new Error("No function output. Check the function API name and access.");
+      const data = typeof output === "string" ? JSON.parse(output) : output;
+      if (String(data?.salesOrderId) === salesOrderId &&
+          /^\d{10,25}$/.test(String(data?.attachmentId)) &&
+          typeof data?.fileName === "string") {
+        void showAttachment(orderPath, String(data.attachmentId), data.fileName);
+      } else if (data?.ok) {
+        throw new Error("Zoho returned an unverified attachment. Confirm the updated standalone code is saved.");
+      } else {
+        attachmentStatus.textContent = "No attachment selected.";
       }
       if (!data?.ok || typeof data.text !== "string") {
-        throw new Error(data?.error || "Zoho OCR did not return document text.");
+        throw new Error(data?.error || "Zoho OCR did not return text.");
       }
-      if (String(data.salesOrderId) !== salesOrderId || String(data.attachmentId) !== attachmentId ||
-          data.model !== ocrMode) {
-        throw new Error("The function response could not be verified against this attachment. Update the standalone function before scanning.");
-      }
-      return parseOcr(data.text);
-  }
-
-  function extractionScore(scan) {
-    return (scan.billing.address ? 1 : 0) + (scan.shipping.address ? 1 : 0)
-      + scan.items.filter(item => item.sku && item.arithmetic_ok).length * 2;
-  }
-
-  async function runScan() {
-    if (!selectedAttachment) return;
-    const request = ++scanRequest;
-    const { salesOrderId, attachmentId } = selectedAttachment;
-    result = undefined;
-    results.replaceChildren();
-    scanStatus.textContent = "Zoho is reading the selected PO…";
-    try {
-      let extracted = await scanWithModel(salesOrderId, attachmentId, "OCR");
-      if (request !== scanRequest) return;
-      if (!extracted.items.some(item => item.sku && item.arithmetic_ok)) {
-        scanStatus.textContent = "Checking the layout with Zoho Document OCR…";
-        try {
-          const alternate = await scanWithModel(salesOrderId, attachmentId, "DOCUMENT");
-          if (request !== scanRequest) return;
-          if (extractionScore(alternate) > extractionScore(extracted)) extracted = alternate;
-        } catch {
-          if (request !== scanRequest) return;
-          extracted.warnings.push("The alternate Zoho OCR mode could not complete. Verify the original PO.");
-        }
-      }
-      result = extracted;
-      scanStatus.textContent = "Scan complete. Review differences and any unconfirmed fields.";
+      result = parseOcr(data.text);
       renderResults();
+      scanStatus.textContent = "Scan complete. Review differences and any unconfirmed fields.";
     } catch (error) {
       if (request !== scanRequest) return;
-      scanStatus.textContent = error instanceof Error
-        ? "Scan failed. " + error.message
-        : "Zoho could not run the scan function. Check the function and its connection.";
+      if (attachmentStatus.textContent === "Zoho is choosing the attachment…") {
+        attachmentStatus.textContent = "No attachment selected.";
+      }
+      scanStatus.textContent = "Scan failed. " + (error?.message || "Check the function and its connection.");
     }
   }
 
@@ -617,101 +677,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     return [status || "no HTTP status", code].join(", ");
   }
 
-  async function attachment(orderPath, file) {
-    const request = ++fileRequest;
-    clearFile();
-    if (!file) return;
-    selectedAttachment = { salesOrderId: orderPath.split("/").pop(), attachmentId: String(file.id) };
-    void runScan();
-    attachmentStatus.textContent = "Loading the CRM attachment preview…";
-    try {
-      const response = await zrc.get(orderPath + "/Attachments/" + file.id, { responseType: "blob" });
-      if (request !== fileRequest) return;
-      if (response.status !== 200 || !(response.data instanceof Blob)) {
-        throw Object.assign(new Error("File download failed."), { status: response.status });
-      }
-      await selectFile(response.data, file.File_Name, request);
-      if (request === fileRequest) attachmentStatus.textContent = file.File_Name;
-    } catch (error) {
-      if (request === fileRequest) {
-        attachmentStatus.textContent = "CRM attachment preview unavailable (" + errorCode(error) + "). The OCR status is shown on the right.";
-      }
-    }
-  }
-
-  async function listAttachments(orderPath) {
-    try {
-      const response = await zrc.get(orderPath + "/Attachments", {
-        params: { fields: "id,File_Name", per_page: 200 }
-      });
-      if (![200, 204].includes(response.status)) throw Object.assign(new Error(), {
-        status: response.status, details: response.data
-      });
-      return response.data || {};
-    } catch (firstError) {
-      // Try the SDK's related-list route using the same signed-in CRM user.
-      if (!window.ZOHO?.CRM?.API?.getRelatedRecords) throw firstError;
-      let related;
-      try {
-        related = await window.ZOHO.CRM.API.getRelatedRecords({
-          Entity: "Sales_Orders",
-          RecordID: orderPath.split("/").pop(),
-          RelatedList: "Attachments",
-          page: 1,
-          per_page: 200
-        });
-      } catch {
-        throw firstError;
-      }
-      if (!Array.isArray(related?.data)) throw firstError;
-      return related;
-    }
-  }
-
-  async function loadAttachments(orderPath, request) {
-    try {
-      const attachments = await listAttachments(orderPath);
-      if (request !== recordRequest) return;
-      const files = (attachments.data || []).filter(file =>
-        /^\d+$/.test(String(file.id)) && /\.(pdf|png|jpe?g)$/i.test(file.File_Name || ""));
-      if (!files.length) {
-        attachmentStatus.textContent = "No supported files found on the first page of CRM attachments.";
-        scanStatus.textContent = "Add a PDF, PNG, or JPEG attachment to the Sales Order to scan it.";
-        return;
-      }
-      picker.replaceChildren(new Option("Choose the PO…", ""));
-      for (const file of files) picker.add(new Option(file.File_Name, String(file.id)));
-      picker.hidden = false;
-      picker.onchange = () => void attachment(orderPath, files.find(file => String(file.id) === picker.value));
-      attachmentStatus.textContent = attachments.info?.more_records
-        ? "Choose the PO from the first page of attachments." : "Choose the purchase order.";
-      scanStatus.textContent = "The scan starts automatically once a PO is selected.";
-      const poReference = key(order?.Purchase_Order);
-      const referenceMatches = /^[A-Z0-9][A-Z0-9._-]*$/.test(poReference)
-        ? files.filter(file => key(file.File_Name.replace(/\.[^.]+$/, "")) === poReference)
-        : [];
-      const selected = files.length === 1 ? files[0]
-        : referenceMatches.length === 1 ? referenceMatches[0] : undefined;
-      if (selected && !attachments.info?.more_records && !selectedAttachment) {
-        picker.value = String(selected.id);
-        await attachment(orderPath, selected);
-      }
-    } catch (error) {
-      if (request !== recordRequest) return;
-      attachmentStatus.textContent = "Attachment list failed (" + errorCode(error) + "). Check the Sales Order attachment access.";
-      scanStatus.textContent = "Zoho OCR is waiting for an attachment.";
-    }
-  }
-
   async function loadOrder(context) {
     const request = ++recordRequest;
     ++fileRequest;
     clearFile();
     order = undefined;
-    el("order-details").replaceChildren();
-    picker.replaceChildren();
-    picker.hidden = true;
-    picker.onchange = null;
     const native = context?.Entity === "Sales_Orders" ? context.EntityId : undefined;
     const id = context?.salesOrderId ?? context?.data?.salesOrderId ?? (Array.isArray(native) ? native[0] : native);
     if (!/^\d+$/.test(String(id))) {
@@ -734,8 +704,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw Object.assign(new Error(), { status: response.status, details: response.data });
       }
       orderStatus.textContent = order.Subject || "Current Sales Order";
-      displayOrder();
-      void loadAttachments(path, request);
+      renderResults();
+      void runScan(path, String(id));
     } catch (error) {
       if (request === recordRequest) orderStatus.textContent = "Sales Order read failed (" + errorCode(error) + ").";
     }
