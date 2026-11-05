@@ -24,15 +24,15 @@ textarea{color:var(--navy);background:var(--oat);border:1px solid var(--grey);bo
 iframe,img{width:100%;display:block;border:0;margin-top:8px} iframe{height:65vh;background:var(--oat)}
 table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:14px}
 td{width:50%;padding:9px 12px;text-align:left;border-bottom:1px solid var(--grey);vertical-align:top;overflow-wrap:anywhere}
-td+td{border-left:1px solid var(--grey)}
+td+td{border-left:1px solid var(--grey);background:#eaf3fa}
 .column-headings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:var(--navy);color:white;border-radius:6px;overflow:hidden}
 .column-headings h2{margin:0;padding:11px 12px;font-size:16px}
-.column-headings h2+h2{border-left:1px solid var(--light-teal)}
+.column-headings h2+h2{border-left:1px solid var(--light-teal);background:#315e78}
 .field-label{display:block;color:var(--bright-navy);font-size:12px;font-weight:700;margin-bottom:2px}
 .comparison-group{margin:16px 0}
 .comparison-group h3{background:var(--oat);border-left:3px solid var(--lime);margin:0;padding:8px 10px}
-.crm-differs{background:#fde8e7;box-shadow:inset 3px 0 #b42318}
-.crm-review{background:#f1f5e6}
+td.crm-differs{background:#fde8e7;box-shadow:inset 3px 0 #b42318}
+td.crm-review{background:#dcebf5}
 .field-status{display:block;font-size:12px;font-weight:700;margin-top:3px}
 .crm-differs .field-status{color:#8f1f17}
 .crm-review .field-status{color:var(--bright-navy)}
@@ -83,7 +83,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   const preview = el("preview");
   let objectUrl, previewId, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
-  const diagnosticVersion = "18";
+  const diagnosticVersion = "19";
   const diagnosticReport = el("diagnostic-report");
   let trace = [];
 
@@ -172,16 +172,34 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const zip = key(value).replace(/\s/g, "");
     return /^\d{5}-\d{4}$/.test(zip) ? zip.slice(0, 5) : zip;
   }
+  const usRegions = {
+    ALABAMA:"AL", ALASKA:"AK", ARIZONA:"AZ", ARKANSAS:"AR", CALIFORNIA:"CA",
+    COLORADO:"CO", CONNECTICUT:"CT", DELAWARE:"DE", "DISTRICT OF COLUMBIA":"DC",
+    FLORIDA:"FL", GEORGIA:"GA", HAWAII:"HI", IDAHO:"ID", ILLINOIS:"IL",
+    INDIANA:"IN", IOWA:"IA", KANSAS:"KS", KENTUCKY:"KY", LOUISIANA:"LA",
+    MAINE:"ME", MARYLAND:"MD", MASSACHUSETTS:"MA", MICHIGAN:"MI", MINNESOTA:"MN",
+    MISSISSIPPI:"MS", MISSOURI:"MO", MONTANA:"MT", NEBRASKA:"NE", NEVADA:"NV",
+    "NEW HAMPSHIRE":"NH", "NEW JERSEY":"NJ", "NEW MEXICO":"NM", "NEW YORK":"NY",
+    "NORTH CAROLINA":"NC", "NORTH DAKOTA":"ND", OHIO:"OH", OKLAHOMA:"OK",
+    OREGON:"OR", PENNSYLVANIA:"PA", "RHODE ISLAND":"RI", "SOUTH CAROLINA":"SC",
+    "SOUTH DAKOTA":"SD", TENNESSEE:"TN", TEXAS:"TX", UTAH:"UT", VERMONT:"VT",
+    VIRGINIA:"VA", WASHINGTON:"WA", "WEST VIRGINIA":"WV", WISCONSIN:"WI", WYOMING:"WY"
+  };
+  const canadianRegions = {
+    ALBERTA:"AB", "BRITISH COLUMBIA":"BC", MANITOBA:"MB", "NEW BRUNSWICK":"NB",
+    "NEWFOUNDLAND AND LABRADOR":"NL", NEWFOUNDLAND:"NL", "NOVA SCOTIA":"NS",
+    "NORTHWEST TERRITORIES":"NT", NUNAVUT:"NU", ONTARIO:"ON",
+    "PRINCE EDWARD ISLAND":"PE", QUEBEC:"QC", SASKATCHEWAN:"SK", YUKON:"YT"
+  };
+  const regionEntries = Object.entries({ ...usRegions, ...canadianRegions })
+    .sort(([a], [b]) => b.length - a.length);
+  const usCodes = new Set(Object.values(usRegions));
+  const canadianCodes = new Set(Object.values(canadianRegions));
+
   function cityKey(value) {
-    const states = {
-      ALABAMA: "AL", ARIZONA: "AZ", ARKANSAS: "AR", CALIFORNIA: "CA",
-      CONNECTICUT: "CT", FLORIDA: "FL", ILLINOIS: "IL", INDIANA: "IN",
-      MICHIGAN: "MI", NEVADA: "NV", "NEW JERSEY": "NJ", "NEW YORK": "NY",
-      OHIO: "OH", PENNSYLVANIA: "PA", VIRGINIA: "VA", WISCONSIN: "WI",
-      ONTARIO: "ON", QUEBEC: "QC", ALBERTA: "AB", "BRITISH COLUMBIA": "BC"
-    };
     const text = normalized(value);
-    for (const [name, code] of Object.entries(states)) {
+    for (const [name, code] of regionEntries) {
+      if (text === name) return code;
       if (text.endsWith(" " + name)) return text.slice(0, -name.length) + code;
     }
     return text;
@@ -190,6 +208,24 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const text = normalized(value);
     if (["US", "USA", "U S A", "UNITED STATES", "UNITED STATES OF AMERICA"].includes(text)) return "US";
     return text === "CANADA" ? "CA" : text;
+  }
+  function poCountry(address) {
+    if (!address) return {};
+    const zip = key(address.postal_code).replace(/\s/g, "");
+    const byZip = /^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\d[ABCEGHJ-NPRSTV-Z]\d$/.test(zip) ? "CA"
+      : /^\d{5}(?:-?\d{4})?$/.test(zip) ? "US" : "";
+    const region = cityKey(address.city_region).split(" ").at(-1);
+    const byRegion = canadianCodes.has(region) ? "CA" : usCodes.has(region) ? "US" : "";
+    const printed = address.country_as_printed;
+    const printedCode = countryKey(printed);
+    const conflict = Boolean(byZip && byRegion && byZip !== byRegion) ||
+      (["CA", "US"].includes(printedCode) &&
+        [byZip, byRegion].some(code => code && code !== printedCode));
+    if (conflict) return { value: printed, label: printed || "Conflicting address clues", conflict };
+    if (printed) return { value: printed, label: printed };
+    const code = byZip || byRegion;
+    const value = code === "CA" ? "Canada" : code === "US" ? "United States" : null;
+    return { value, label: value ? value + " (inferred)" : null };
   }
   function crmAddress(prefix) {
     return {
@@ -208,15 +244,20 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       ["Company / account", po?.name, account, normalized],
       ["Street", po?.street, crm.street, streetKey],
       ["City / region", po?.city_region, crm.city, cityKey],
-      ["Postal code", po?.postal_code, crm.zip, zipKey],
-      ["Country", po?.country_as_printed, crm.country, countryKey]
+      ["Postal code", po?.postal_code, crm.zip, zipKey]
     ];
-    const group = comparisonGroup(prefix, fields.map(([name, left, right, normalize]) => [
+    const rows = fields.map(([name, left, right, normalize]) => [
       name, left, right,
       !result ? "" : !left ? "Needs review" : !right ? "CRM blank"
         : normalize(left) === normalize(right) ? "Match"
         : name === "Company / account" ? "Verify account name" : "Differs"
-    ]));
+    ]);
+    const country = poCountry(po);
+    rows.push(["Country", country.label, crm.country,
+      !result ? "" : country.conflict || !country.value ? "Needs review"
+        : !crm.country ? "CRM blank"
+        : countryKey(country.value) === countryKey(crm.country) ? "Match" : "Differs"]);
+    const group = comparisonGroup(prefix, rows);
     if (entry?.evidence.length) {
       const details = document.createElement("details");
       details.className = "evidence";
@@ -347,18 +388,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         !result ? "" : !poCurrency ? "Needs review" : !crmCurrency ? "CRM blank"
           : key(poCurrency) === key(crmCurrency) ? "Match" : "Differs"]
     ];
-    for (const [label, field, current] of [
-      ["Subtotal", "subtotal", order.SubTotal ?? order.Sub_Total],
-      ["Tax", "tax", order.Tax],
-      ["Freight", "freight", order.Shipping_Charge],
-      ["Total", "total", order.Grand_Total]
-    ]) {
-      const amount = result?.amounts[field];
-      const comparable = amount && !amount.ambiguous && !(amount.currency && crmCurrency && amount.currency !== crmCurrency);
-      rows.push([label, amount?.value, current, !result ? "" : !comparable ? "Needs review"
-        : current == null || current === "" ? "CRM blank" : numericCheck(amount.value, current)]);
-    }
-    if ((order.Discounts ?? order.Discount) != null) rows.push(["Order discounts", null, order.Discounts ?? order.Discount, "CRM only"]);
+    const amount = result?.amounts.total;
+    const comparable = amount && !amount.ambiguous && !(amount.currency && crmCurrency && amount.currency !== crmCurrency);
+    const current = order.Grand_Total;
+    rows.push(["Total", amount?.value, current, !result ? "" : !comparable ? "Needs review"
+      : current == null || current === "" ? "CRM blank" : numericCheck(amount.value, current)]);
     comparisonGroup("PO reference and totals", rows);
 
     comparisonGroup("Sales Order accounts", [
