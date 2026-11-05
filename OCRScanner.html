@@ -20,30 +20,19 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
 </head>
 <body>
 <h1>Sales Order PO Review</h1>
-<p class="muted">Read-only comparison · Local Python scanner · Auto-scan</p>
+<p class="muted">Read-only comparison · Zoho OCR · Auto-scan</p>
 <main>
 <section>
 <h2>Original purchase order</h2>
 <p id="attachment-status" role="status">Waiting for Zoho…</p>
 <select id="attachments" aria-label="Purchase order attachment" hidden></select>
-<details id="manual"><summary>Choose a local PO</summary>
-<label for="local-file">PDF, PNG, or JPEG</label><input id="local-file" type="file" accept=".pdf,.png,.jpg,.jpeg"></details>
 <div id="preview"></div>
 </section>
 <section>
 <h2>Sales Order comparison</h2>
 <p id="order-status" role="status">Waiting for Zoho…</p>
 <div id="order-details"></div>
-<button id="scan" disabled>Scan selected PO</button>
-<p id="scan-status" role="status">Choose a PO to scan.</p>
-<button id="export-scan" hidden>Download scan results</button>
-<details id="transfer" hidden>
-<summary>Use scan results from the local scanner</summary>
-<p>Scan the same PO in the local scanner, download its results, then select that JSON here.</p>
-<p><a href="http://127.0.0.1:8765/" target="_blank" rel="noopener">Open local scanner</a></p>
-<label for="import-scan">Scan results JSON</label>
-<input id="import-scan" type="file" accept=".json,application/json">
-</details>
+<p id="scan-status" role="status">Waiting for the Sales Order attachment…</p>
 <div id="results"></div>
 </section>
 </main>
@@ -51,18 +40,13 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
 (() => {
   "use strict";
   const el = id => document.getElementById(id);
-  const localOrigin = "http://127.0.0.1:8765";
   const attachmentStatus = el("attachment-status");
   const orderStatus = el("order-status");
   const scanStatus = el("scan-status");
   const results = el("results");
   const picker = el("attachments");
   const preview = el("preview");
-  const scan = el("scan");
-  const exportScan = el("export-scan");
-  const transfer = el("transfer");
-  const standalone = window.location.origin === localOrigin;
-  let selectedBlob, objectUrl, order, result;
+  let selectedAttachment, objectUrl, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
 
   function paragraph(parent, text, tone = "") {
@@ -234,7 +218,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       label.textContent = "PO evidence";
       details.append(label);
       for (const evidence of entry.evidence) {
-        paragraph(details, "Page " + evidence.page + " · " + evidence.label);
+        paragraph(details, evidence.page ? "Page " + evidence.page + " · " + evidence.label : evidence.label);
         const block = document.createElement("pre");
         block.textContent = evidence.source_lines.join("\n");
         details.append(block);
@@ -270,7 +254,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   }
   function renderItems() {
     title(results, "Products and line items");
-    if (!result.catalog_loaded) paragraph(results, "Catalog unavailable. Matching uses the printed SKU and CRM Product Name.", "review");
+    paragraph(results, "Matches use the printed supplier SKU and CRM Product Name or SKU-style Product Code.", "muted");
     const current = crmItems();
     const complete = current && !order?.$has_more?.Ordered_Items;
     if (!current) paragraph(results, "CRM line items unavailable in this view.", "review");
@@ -300,7 +284,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         decimal(item.unit_price) !== null && decimal(item.quantity) !== null
         ? numericCheck(Math.round(decimal(item.unit_price) * decimal(item.quantity) *
           decimal(item.discount_percent)) / 100, line.discount) : null;
-      let status = !current ? "PO only" : !item.sku || duplicate ? "Needs review"
+      let status = !current ? "PO only" : !item.sku || duplicate || !item.arithmetic_ok ? "Needs review"
         : !line ? (complete ? "No matching CRM product" : "Needs review")
         : [qty, price, amount, discount].includes("Differs") ? "Differs"
         : [qty, price, amount, discount].includes("Needs review") ? "Needs review" : "Match";
@@ -330,7 +314,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       const summary = document.createElement("summary");
       summary.textContent = "Printed item rows";
       evidence.append(summary);
-      for (const item of result.items) paragraph(evidence, "Page " + item.page + " · " + item.source);
+      for (const item of result.items) paragraph(evidence, item.page ? "Page " + item.page + " · " + item.source : item.source);
       results.append(evidence);
     }
   }
@@ -338,6 +322,10 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   function renderResults() {
     results.replaceChildren();
     if (!result) return;
+    if (result.po_numbers.length === 1 && order?.Purchase_Order &&
+        key(result.po_numbers[0]) !== key(order.Purchase_Order)) {
+      paragraph(results, "The printed PO number differs from the Sales Order PO reference. Verify the selected document.", "review");
+    }
     showAddress("billing", "Billing");
     showAddress("shipping", "Shipping");
     if (result.invoice_routing.length) {
@@ -372,69 +360,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     ++scanRequest;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = undefined;
-    selectedBlob = undefined;
+    selectedAttachment = undefined;
     result = undefined;
     preview.replaceChildren();
     results.replaceChildren();
-    scan.disabled = true;
-    exportScan.hidden = true;
-    scanStatus.textContent = "Choose a PO to scan.";
+    scanStatus.textContent = "Waiting for the selected attachment…";
   }
-  async function fingerprint(blob) {
-    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-  }
-
-  exportScan.addEventListener("click", async () => {
-    if (!result || !selectedBlob) return;
-    const savedResult = result;
-    const sha256 = await fingerprint(selectedBlob);
-    if (savedResult !== result) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify({
-      format: "po-scanner-v1", sha256, result: savedResult
-    })], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "po-scan-results.json";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
-
-  el("import-scan").addEventListener("change", async event => {
-    const file = event.target.files[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!selectedBlob) {
-      scanStatus.textContent = "Select or preview the PO in this widget first.";
-      return;
-    }
-    const current = selectedBlob;
-    const request = ++scanRequest;
-    scan.disabled = false;
-    try {
-      if (file.size > 2 * 1024 * 1024) throw new Error("Scan results file is too large.");
-      const saved = JSON.parse(await file.text());
-      if (saved?.format !== "po-scanner-v1" ||
-          !Array.isArray(saved.result?.items) || !Array.isArray(saved.result?.warnings) ||
-          !Array.isArray(saved.result?.billing?.evidence) ||
-          !Array.isArray(saved.result?.shipping?.evidence) ||
-          !Array.isArray(saved.result?.invoice_routing) ||
-          !Array.isArray(saved.result?.po_numbers) || !saved.result?.amounts) {
-        throw new Error("Choose a results file downloaded from the local scanner.");
-      }
-      const sha256 = await fingerprint(current);
-      if (request !== scanRequest) return;
-      if (sha256 !== saved.sha256) throw new Error("These results belong to a different file. Scan the exact PO selected in this widget.");
-      result = saved.result;
-      renderResults();
-      scanStatus.textContent = "Imported local scan. Review the comparison below.";
-    } catch (error) {
-      if (request !== scanRequest) return;
-      result = undefined;
-      results.replaceChildren();
-      scanStatus.textContent = "Import failed. " + error.message;
-    }
-  });
   async function selectFile(blob, name, request) {
     const bytes = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
     if (request !== fileRequest) return;
@@ -443,7 +374,6 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     else if ([137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v)) mime = "image/png";
     else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) mime = "image/jpeg";
     else throw new Error("The file is not a supported PDF, PNG, or JPEG.");
-    selectedBlob = blob;
     objectUrl = URL.createObjectURL(blob.slice(0, blob.size, mime));
     const open = document.createElement("a");
     open.href = objectUrl;
@@ -455,61 +385,229 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     if (viewer.tagName === "IMG") viewer.alt = "Original purchase order";
     viewer.src = objectUrl;
     preview.append(open, viewer);
-    scan.disabled = false;
-    scanStatus.textContent = "Ready to scan " + name + ".";
   }
 
-  scan.addEventListener("click", async () => {
-    if (!selectedBlob) return;
+  function parseOcr(raw) {
+    // Keep lines and column spacing. Zoho may return escaped or literal line breaks.
+    const text = raw.replace(/\\r\\n|\\n|\\r/g, "\n").replace(/\r\n?/g, "\n")
+      .replace(/\\t|\t/g, "    ").replace(/\u00a0/g, " ");
+    const lines = text.split(/\n|\f/);
+    const warnings = [];
+    const evidence = { billing: [], shipping: [], invoice_routing: [] };
+    const heading = /\b(?<label>shipping\s+address|ship(?:ped)?\s+to(?:\s+address)?|delivery\s+address|deliver\s+to|destination\s+address|bill(?:ing\s+address|\s+to)|invoice\s+to|invoices\s+sent)\b(?:\s*\/\s*(?:exp[ée]dier\s+[àa]|facturer\s+[àa]))?\s*:?/gi;
+    const postal = /^(?<place>.+?)\s+(?<zip>[A-Z]\d[A-Z]\s?\d[A-Z]\d|\d{5}(?:-\d{4})?)(?:\s+(?<country>USA|US|CANADA|UNITED STATES))?$/i;
+    const stop = /^(?:ordered by|remarks|comments to supplier|line\s+(?:item|nbr)|pr no|terms|for questions|supplier|page\s+\d)\b/i;
+    const cell = value => value.trim().split(/ {3,}/)[0];
+    const street = /^(?:\d+[A-Z]?\s+\S|P\.?\s*O\.?\s+BOX\b)/i;
+    const unit = /^(?:STE\.?|SUITE|UNIT|APT\.?|BLDG\.?|FLOOR|#)\s*[\w-]+/i;
+    const addressNoise = /^(?:(?:qte|quote)\s*(?:#|no\.?)|vendor\s+(?:fax|phone))/i;
+    const hasHeading = value => Array.from(value.matchAll(heading)).length > 0;
+
+    function parseAddress(block) {
+      const clean = block.filter(value => !addressNoise.test(value))
+        .map(value => value.replace(/^Address\s*:\s*/i, ""));
+      const start = clean.findIndex(value => street.test(value));
+      if (start < 1) return null;
+      for (let i = start + 1; i < clean.length; i++) {
+        const match = clean[i].match(postal)?.groups;
+        if (!match) continue;
+        return {
+          name: clean[0], street: [clean[start], ...clean.slice(start + 1, i).filter(value => unit.test(value))].join(", "),
+          city_region: match.place.replace(/[, ]+$/, ""), postal_code: match.zip,
+          country_as_printed: match.country || null
+        };
+      }
+      return null;
+    }
+
+    for (const [index, line] of lines.entries()) {
+      const headings = Array.from(line.matchAll(heading));
+      for (const [position, mark] of headings.entries()) {
+        const label = mark.groups.label.toLowerCase().replace(/\s+/g, " ");
+        const role = label === "invoices sent" ? "invoice_routing" : /^(bill|invoice)/.test(label) ? "billing" : "shipping";
+        const left = Math.max(0, mark.index - 1);
+        const right = headings[position + 1]?.index;
+        const first = cell(line.slice(mark.index + mark[0].length, right));
+        const block = first ? [first] : [];
+        for (const next of lines.slice(index + 1, index + 13)) {
+          if (hasHeading(next)) break;
+          const value = cell(next.slice(left, right));
+          if (!value || addressNoise.test(value)) continue;
+          if (stop.test(value)) break;
+          block.push(value);
+          if (postal.test(value)) break;
+        }
+        if (block.length) evidence[role].push({
+          page: null, label, source_lines: block,
+          address: role === "invoice_routing" ? null : parseAddress(block)
+        });
+      }
+    }
+
+    const output = { invoice_routing: evidence.invoice_routing, catalog_loaded: false };
+    for (const role of ["billing", "shipping"]) {
+      const found = [...new Map(evidence[role].filter(entry => entry.address)
+        .map(entry => [JSON.stringify(entry.address), entry.address])).values()];
+      output[role] = { address: found.length === 1 ? found[0] : null, evidence: evidence[role] };
+    }
+
+    const decimal = value => value?.replace(/,/g, "") ?? null;
+    const numberPattern = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`;
+    const money = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2,4}`;
+    const units = "(?:EACH|EA|PCS?|UNIT|SET|YR|MO)";
+    const tail = new RegExp(
+      "\\s+(?<qty>" + numberPattern + ")\\s*(?:" + units + ")?\\s+\\$?(?<price>" + money +
+      ")\\s*(?:" + units + ")?\\s+(?:(?<discount>" + numberPattern + ")%\\s+)?\\$?(?<amount>" + money + ")\\s*$", "i");
+    const xeroxTail = new RegExp("\\s+" + units + "\\s+(?<qty>" + numberPattern +
+      ")\\s+(?:[A-Z][A-Z0-9-]+\\s+)?\\$?(?<price>" + money + ")\\s+\\$?(?<amount>" + money + ")\\s*$", "i");
+    const totalPattern = new RegExp("\\b(?<label>total\\s+purchase\\s+order|grand\\s+total|total\\s+amount|" +
+      "po\\s+total(?:\\s*/\\s*totale?\\s+du)?|sub\\s*total|freight|shipping\\s+charge|sales\\s+tax|tax(?:\\s*/\\s*taxe)?|total)" +
+      "\\s*:?\\s*(?<currency>USD|CAD)?\\s*\\$?\\s*(?<value>" + money + ")\\s*$", "i");
+    const currencyAmount = new RegExp("\\b(?<currency>USD|CAD)\\s+\\$?(?<value>" + money + ")\\s*$", "i");
+    const poNumber = /\b(?:purchase\s+order\s*(?:no\.?|number|#)?|order\s+number)\s*:?\s+(?<value>[A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*)\b/i;
+    const skuPattern = /^[A-Z0-9][A-Z0-9._/-]*$/i;
+    const amounts = {}, items = [], poNumbers = new Set();
+    let layout, previous, pendingTotal = false;
+    function addAmount(label, value, currency) {
+      const key = label.toLowerCase().replace(/\s/g, "");
+      const name = key.startsWith("pototal") ? "total" : key.startsWith("tax/") ? "tax"
+        : ({ totalpurchaseorder: "total", grandtotal: "total", totalamount: "total", salestax: "tax", shippingcharge: "freight" })[key] || key;
+      if (!amounts[name]) amounts[name] = { value: decimal(value), currency: currency?.toUpperCase() };
+      else if (amounts[name].value !== decimal(value)) amounts[name].ambiguous = true;
+    }
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const po = line.match(poNumber)?.groups;
+      if (po) poNumbers.add(po.value);
+      const printedTotal = line.match(totalPattern)?.groups;
+      const separateTotal = pendingTotal && line.match(currencyAmount)?.groups;
+      pendingTotal = /\bTOTAL AMOUNT\s*$/i.test(line);
+      if (printedTotal) addAmount(printedTotal.label, printedTotal.value, printedTotal.currency);
+      if (separateTotal) addAmount("total", separateTotal.value, separateTotal.currency);
+      const upper = line.toUpperCase();
+      if (upper.includes("LINE ITEM DETAILS") || /SUPPLIER.*BUYER PART.*QTY/.test(upper)) { layout = "konica"; previous = null; continue; }
+      if (/SUPPLIER PART/.test(upper) && /ITEM NBR|QTY/.test(upper) && /PRICE|PRIX/.test(upper)) { layout = "bilingual"; previous = null; continue; }
+      if (/ITEM DESCRIPTION/.test(upper) && /EXTENSION/.test(upper) && /QUANTITY/.test(upper)) { layout = "xerox"; previous = null; continue; }
+      if (/\bITEM\b/.test(upper) && /\b(?:QTY|QUANTITY)\b/.test(upper) && /PRICE/.test(upper)) { layout = "standard"; previous = null; continue; }
+      if (printedTotal || /^(TERMS AND CONDITIONS|SIGNATURE)/.test(upper)) { layout = null; previous = null; continue; }
+      if (!layout) continue;
+      const row = line.match(/^(?<line>\d{1,6})\s+(?<body>.+)$/)?.groups;
+      if (!row) {
+        if (layout === "xerox" && previous && skuPattern.test(line)) {
+          const half = line.slice(0, line.length / 2);
+          if (half.includes("-") && half + half === line) {
+            if (previous.sku && previous.sku !== half) previous.sku_conflict = true;
+            else previous.sku = half;
+          }
+        }
+        continue;
+      }
+      const values = row.body.match(layout === "xerox" ? xeroxTail : tail);
+      const prefix = (values ? row.body.slice(0, values.index) : row.body).trim();
+      const cells = prefix.split(/ {2,}/);
+      let sku = cells[0]?.split(/\s+/)[0], buyer = null;
+      if (layout === "konica") {
+        buyer = cells.length >= 3 ? cells.at(-1) : null;
+        sku = cells.length >= 3 ? cells.at(-2) : null;
+      } else if (layout === "bilingual") {
+        buyer = sku;
+        const rest = cells.slice(1).filter(value => !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(value));
+        sku = rest.at(-1) || null;
+      } else if (layout === "xerox") {
+        buyer = sku;
+        sku = null;
+      }
+      if (!sku || !skuPattern.test(sku)) sku = null;
+      if (!values && !sku && !buyer) continue;
+      const nums = values?.groups || {};
+      previous = {
+        line: row.line, page: null, sku, buyer_code: buyer, catalog_candidates: [],
+        quantity: decimal(nums.qty), unit_price: decimal(nums.price), amount: decimal(nums.amount),
+        discount_percent: decimal(nums.discount), source: line
+      };
+      items.push(previous);
+    }
+
+    for (const item of items) {
+      if (item.sku_conflict) item.sku = null;
+      if (!item.sku || item.amount === null) warnings.push("Line " + item.line + ": verify the SKU and amount against the original PO.");
+      item.arithmetic_ok = false;
+      if (item.quantity !== null && item.unit_price !== null && item.amount !== null) {
+        const expected = Number(item.quantity) * Number(item.unit_price) *
+          (1 - Number(item.discount_percent ?? 0) / 100);
+        item.arithmetic_ok = Math.abs(expected - Number(item.amount)) <= 0.011;
+        if (!item.arithmetic_ok) warnings.push("Line " + item.line + ": quantity, unit price, and printed amount do not reconcile. Check for OCR or adjustments.");
+      }
+    }
+    if (!items.length) warnings.push("No item rows could be read confidently. Check the original PO.");
+    if (lines.filter(line => line.trim()).length < 3) warnings.push("Zoho returned little or no line structure. Check the original PO.");
+    return { ...output, items, amounts, po_numbers: [...poNumbers], warnings };
+  }
+
+  async function scanWithModel(salesOrderId, attachmentId, ocrMode) {
+      const response = await window.ZOHO.CRM.FUNCTIONS.execute("scan_sales_order_po", {
+        arguments: JSON.stringify({ salesOrderId, attachmentId, ocrMode })
+      });
+      const output = response?.details?.output ?? response?.data?.details?.output ?? response?.output;
+      if (output == null) {
+        const rawCode = String(response?.code ?? "NO_OUTPUT");
+        const code = /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(rawCode) ? rawCode : "NO_OUTPUT";
+        throw new Error("The Zoho function returned no result (" + code + "). Check the function API name and access.");
+      }
+      let data;
+      try {
+        data = typeof output === "string" ? JSON.parse(output) : output;
+      } catch {
+        throw new Error("The Zoho function returned an unreadable result.");
+      }
+      if (!data?.ok || typeof data.text !== "string") {
+        throw new Error(data?.error || "Zoho OCR did not return document text.");
+      }
+      if (String(data.salesOrderId) !== salesOrderId || String(data.attachmentId) !== attachmentId ||
+          data.model !== ocrMode) {
+        throw new Error("The function response could not be verified against this attachment. Update the standalone function before scanning.");
+      }
+      return parseOcr(data.text);
+  }
+
+  function extractionScore(scan) {
+    return (scan.billing.address ? 1 : 0) + (scan.shipping.address ? 1 : 0)
+      + scan.items.filter(item => item.sku && item.arithmetic_ok).length * 2;
+  }
+
+  async function runScan() {
+    if (!selectedAttachment) return;
     const request = ++scanRequest;
-    scan.disabled = true;
-    exportScan.hidden = true;
+    const { salesOrderId, attachmentId } = selectedAttachment;
     result = undefined;
     results.replaceChildren();
-    scanStatus.textContent = "Reading the PO on your computer…";
+    scanStatus.textContent = "Zoho is reading the selected PO…";
     try {
-      const response = await fetch(localOrigin + "/scan", {
-        method: "POST", credentials: "omit", targetAddressSpace: "loopback",
-        headers: { "Content-Type": "application/octet-stream" }, body: selectedBlob
-      });
-      const data = await response.json();
+      let extracted = await scanWithModel(salesOrderId, attachmentId, "OCR");
       if (request !== scanRequest) return;
-      if (!response.ok) {
-        scanStatus.textContent = data.error || "Local scanner returned HTTP " + response.status + ".";
-        return;
+      if (!extracted.items.some(item => item.sku && item.arithmetic_ok)) {
+        scanStatus.textContent = "Checking the layout with Zoho Document OCR…";
+        try {
+          const alternate = await scanWithModel(salesOrderId, attachmentId, "DOCUMENT");
+          if (request !== scanRequest) return;
+          if (extractionScore(alternate) > extractionScore(extracted)) extracted = alternate;
+        } catch {
+          if (request !== scanRequest) return;
+          extracted.warnings.push("The alternate Zoho OCR mode could not complete. Verify the original PO.");
+        }
       }
-      result = data;
+      result = extracted;
       scanStatus.textContent = "Scan complete. Review differences and any unconfirmed fields.";
       renderResults();
-      exportScan.hidden = !standalone;
-    } catch {
-      if (request !== scanRequest) return;
-      scanStatus.textContent = standalone
-        ? "Could not reach Python. Check the scanner window and retry."
-        : "Zoho could not reach local Python. Use the local scanner and import the scan results here.";
-      if (!standalone) {
-        transfer.hidden = false;
-        transfer.open = true;
-      }
-    } finally {
-      if (request === scanRequest) scan.disabled = !selectedBlob;
-    }
-  });
-
-  el("local-file").addEventListener("change", async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const request = ++fileRequest;
-    picker.value = "";
-    clearFile();
-    try {
-      await selectFile(file, file.name, request);
-      if (request === fileRequest && selectedBlob) scan.click();
     } catch (error) {
-      if (request === fileRequest) scanStatus.textContent = error.message;
+      if (request !== scanRequest) return;
+      scanStatus.textContent = error instanceof Error
+        ? "Scan failed. " + error.message
+        : "Zoho could not run the scan function. Check the function and its connection.";
     }
-    event.target.value = "";
-  });
+  }
 
   function errorCode(error) {
     const status = Number(error?.status || error?.response?.status || 0);
@@ -523,7 +621,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const request = ++fileRequest;
     clearFile();
     if (!file) return;
-    attachmentStatus.textContent = "Loading the CRM attachment…";
+    selectedAttachment = { salesOrderId: orderPath.split("/").pop(), attachmentId: String(file.id) };
+    void runScan();
+    attachmentStatus.textContent = "Loading the CRM attachment preview…";
     try {
       const response = await zrc.get(orderPath + "/Attachments/" + file.id, { responseType: "blob" });
       if (request !== fileRequest) return;
@@ -531,14 +631,10 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw Object.assign(new Error("File download failed."), { status: response.status });
       }
       await selectFile(response.data, file.File_Name, request);
-      if (request === fileRequest && selectedBlob) {
-        attachmentStatus.textContent = file.File_Name;
-        scan.click();
-      }
+      if (request === fileRequest) attachmentStatus.textContent = file.File_Name;
     } catch (error) {
       if (request === fileRequest) {
-        attachmentStatus.textContent = "CRM attachment could not open (" + errorCode(error) + "). Choose a local PO to continue.";
-        el("manual").open = true;
+        attachmentStatus.textContent = "CRM attachment preview unavailable (" + errorCode(error) + "). The OCR status is shown on the right.";
       }
     }
   }
@@ -580,7 +676,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         /^\d+$/.test(String(file.id)) && /\.(pdf|png|jpe?g)$/i.test(file.File_Name || ""));
       if (!files.length) {
         attachmentStatus.textContent = "No supported files found on the first page of CRM attachments.";
-        el("manual").open = true;
+        scanStatus.textContent = "Add a PDF, PNG, or JPEG attachment to the Sales Order to scan it.";
         return;
       }
       picker.replaceChildren(new Option("Choose the PO…", ""));
@@ -589,19 +685,33 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       picker.onchange = () => void attachment(orderPath, files.find(file => String(file.id) === picker.value));
       attachmentStatus.textContent = attachments.info?.more_records
         ? "Choose the PO from the first page of attachments." : "Choose the purchase order.";
-      if (files.length === 1 && !attachments.info?.more_records && !selectedBlob) {
-        picker.value = String(files[0].id);
-        await attachment(orderPath, files[0]);
+      scanStatus.textContent = "The scan starts automatically once a PO is selected.";
+      const poReference = key(order?.Purchase_Order);
+      const referenceMatches = /^[A-Z0-9][A-Z0-9._-]*$/.test(poReference)
+        ? files.filter(file => key(file.File_Name.replace(/\.[^.]+$/, "")) === poReference)
+        : [];
+      const selected = files.length === 1 ? files[0]
+        : referenceMatches.length === 1 ? referenceMatches[0] : undefined;
+      if (selected && !attachments.info?.more_records && !selectedAttachment) {
+        picker.value = String(selected.id);
+        await attachment(orderPath, selected);
       }
     } catch (error) {
       if (request !== recordRequest) return;
-      attachmentStatus.textContent = "Attachment list failed (" + errorCode(error) + "). Choose a local PO to continue.";
-      el("manual").open = true;
+      attachmentStatus.textContent = "Attachment list failed (" + errorCode(error) + "). Check the Sales Order attachment access.";
+      scanStatus.textContent = "Zoho OCR is waiting for an attachment.";
     }
   }
 
   async function loadOrder(context) {
     const request = ++recordRequest;
+    ++fileRequest;
+    clearFile();
+    order = undefined;
+    el("order-details").replaceChildren();
+    picker.replaceChildren();
+    picker.hidden = true;
+    picker.onchange = null;
     const native = context?.Entity === "Sales_Orders" ? context.EntityId : undefined;
     const id = context?.salesOrderId ?? context?.data?.salesOrderId ?? (Array.isArray(native) ? native[0] : native);
     if (!/^\d+$/.test(String(id))) {
@@ -614,15 +724,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     }
     const path = "/crm/v8/Sales_Orders/" + id;
     orderStatus.textContent = "Loading the Sales Order…";
-    void loadAttachments(path, request);
+    attachmentStatus.textContent = "Waiting for the Sales Order…";
     try {
       const response = await zrc.get(path);
       if (request !== recordRequest) return;
       order = response.data?.data?.[0];
-      if (!order) throw Object.assign(new Error(), { status: response.status, details: response.data });
+      if (!order || String(order.id) !== String(id)) {
+        order = undefined;
+        throw Object.assign(new Error(), { status: response.status, details: response.data });
+      }
       orderStatus.textContent = order.Subject || "Current Sales Order";
       displayOrder();
-      renderResults();
+      void loadAttachments(path, request);
     } catch (error) {
       if (request === recordRequest) orderStatus.textContent = "Sales Order read failed (" + errorCode(error) + ").";
     }
@@ -630,21 +743,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
 
   if (window.self === window.top) {
     orderStatus.textContent = "Standalone test · open Review PO in Zoho for the Sales Order comparison.";
-    attachmentStatus.textContent = "Choose a local PO to test Python.";
-    el("manual").open = true;
+    attachmentStatus.textContent = "This page loads its attachment inside Zoho CRM."
     return;
   }
   const timer = setTimeout(() => {
     orderStatus.textContent = "Timed out waiting for Zoho record context.";
-    attachmentStatus.textContent = "Choose a local PO if needed.";
-    el("manual").open = true;
+    attachmentStatus.textContent = "Open this widget from the Sales Order detail page."
   }, 12000);
   const sdk = document.createElement("script");
   sdk.src = "https://live.zwidgets.com/js-sdk/1.5/ZohoEmbededAppSDK.min.js";
   sdk.onerror = () => {
     clearTimeout(timer);
     orderStatus.textContent = "Zoho SDK could not load.";
-    el("manual").open = true;
   };
   sdk.onload = async () => {
     try {
@@ -656,7 +766,6 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     } catch {
       clearTimeout(timer);
       orderStatus.textContent = "Zoho SDK could not initialize.";
-      el("manual").open = true;
     }
   };
   document.head.append(sdk);
