@@ -1,51 +1,168 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sales Order PO Review</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 24px;
-      background: #f4f6fa;
-      color: #182230;
-      font: 15px system-ui, sans-serif;
+<script src="https://live.zwidgets.com/js-sdk/1.5/ZohoEmbededAppSDK.min.js"></script>
+<script>
+  const [poPanel, orderPanel] = document.querySelectorAll("main > section");
+  const poStatus = poPanel.querySelector("p");
+  const orderStatus = orderPanel.querySelector("p");
+
+  const picker = document.createElement("select");
+  picker.setAttribute("aria-label", "Purchase order attachment");
+  picker.hidden = true;
+
+  const preview = document.createElement("div");
+  preview.style.marginTop = "12px";
+  poPanel.append(picker, preview);
+
+  let objectUrl;
+  let previewRequest = 0;
+
+  function address(record, prefix) {
+    return [
+      record[`${prefix}_Street`],
+      record[`${prefix}_City`],
+      record[`${prefix}_State`],
+      record[`${prefix}_Code`],
+      record[`${prefix}_Country`] || record[`${prefix}Country`]
+    ].filter(Boolean).join(", ");
+  }
+
+  async function showAttachment(path, file) {
+    const request = ++previewRequest;
+    preview.replaceChildren();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = undefined;
+
+    if (!file) {
+      poStatus.textContent = "Choose the purchase order.";
+      return;
     }
-    h1 { margin: 0; font-size: 24px; }
-    h2 { margin: 0; font-size: 18px; }
-    p { color: #526174; }
-    main {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 24px;
+
+    poStatus.textContent = "Loading the attachment…";
+
+    try {
+      const response = await zrc.get(`${path}/Attachments/${file.id}`, {
+        responseType: "blob"
+      });
+
+      if (request !== previewRequest) return;
+      if (response.status !== 200 || !(response.data instanceof Blob)) {
+        throw new Error("Attachment response did not contain a file.");
+      }
+
+      const mime = /\.pdf$/i.test(file.File_Name) ? "application/pdf"
+        : /\.png$/i.test(file.File_Name) ? "image/png" : "image/jpeg";
+
+      objectUrl = URL.createObjectURL(
+        response.data.slice(0, response.data.size, mime)
+      );
+
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "Open original in a new tab";
+
+      const viewer = document.createElement(mime === "application/pdf" ? "iframe" : "img");
+      viewer.title = "Original purchase order";
+      if (viewer.tagName === "IMG") viewer.alt = "Original purchase order";
+      viewer.src = objectUrl;
+      viewer.style.cssText = "display:block;width:100%;margin-top:8px;border:0";
+      if (viewer.tagName === "IFRAME") viewer.style.height = "55vh";
+
+      preview.append(link, viewer);
+      poStatus.textContent = file.File_Name;
+    } catch {
+      if (request === previewRequest) {
+        poStatus.textContent = "Could not preview this file. Check that it is an uploaded attachment and that you can open it from the Sales Order.";
+      }
     }
-    section {
-      min-height: 240px;
-      padding: 20px;
-      border: 1px solid #dce2eb;
-      border-radius: 12px;
-      background: white;
+  }
+
+  async function loadOrder(context) {
+    const id = context?.salesOrderId || context?.data?.salesOrderId
+      || (context?.Entity === "Sales_Orders"
+        ? [].concat(context.EntityId || [])[0] : "");
+
+    if (!/^\d+$/.test(String(id))) {
+      orderStatus.textContent = "No Sales Order ID received. Open this widget from Review PO on a Sales Order.";
+      poStatus.textContent = "Waiting for Sales Order context.";
+      return;
     }
-    @media (max-width: 640px) {
-      main { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-  <h1>Sales Order PO Review</h1>
-  <p>Read-only review</p>
-  <main>
-    <section>
-      <h2>Original purchase order</h2>
-      <p>The selected Sales Order attachment will appear here.</p>
-    </section>
-    <section>
-      <h2>Sales Order comparison</h2>
-      <p>Account, billing, and shipping details will appear here.</p>
-    </section>
-  </main>
-</body>
-</html>
+
+    const path = `/crm/v8/Sales_Orders/${id}`;
+    orderStatus.textContent = "Loading Sales Order…";
+    poStatus.textContent = "Finding attachments…";
+
+    await Promise.all([
+      (async () => {
+        try {
+          const response = await zrc.get(path);
+          const order = response.data?.data?.[0];
+          if (!order) throw new Error("Sales Order missing from response.");
+
+          orderStatus.textContent = order.Subject || "Current Sales Order";
+          const fields = [
+            ["Account", order.Account_Name?.name],
+            ["Bill To Account", order.Bill_to_Account?.name],
+            ["Ship To Account", order.Ship_to_Account?.name],
+            ["End User Account", order.Existing_End_User_Account?.name],
+            ["Billing address", address(order, "Billing")],
+            ["Shipping address", address(order, "Shipping")]
+          ];
+
+          for (const [label, value] of fields) {
+            const row = document.createElement("p");
+            const heading = document.createElement("strong");
+            heading.textContent = `${label}: `;
+            row.append(heading, value || "—");
+            orderPanel.append(row);
+          }
+        } catch {
+          orderStatus.textContent = "Could not read the Sales Order. Check your CRM access.";
+        }
+      })(),
+      (async () => {
+        try {
+          const response = await zrc.get(`${path}/Attachments`, {
+            params: { fields: "id,File_Name", per_page: 200 }
+          });
+
+          if (![200, 204].includes(response.status)) {
+            throw new Error("Attachment list request failed.");
+          }
+
+          const files = (response.data?.data || [])
+            .filter(file => /\.(pdf|png|jpe?g)$/i.test(file.File_Name || ""));
+
+          if (!files.length) {
+            poStatus.textContent = "No PDF, PNG, or JPEG found on the first page of attachments.";
+            return;
+          }
+
+          picker.replaceChildren(new Option("Choose the purchase order…", ""));
+          for (const file of files) picker.add(new Option(file.File_Name, file.id));
+          picker.hidden = false;
+          picker.onchange = () =>
+            showAttachment(path, files.find(file => String(file.id) === picker.value));
+
+          if (files.length === 1 && !response.data?.info?.more_records) {
+            picker.value = String(files[0].id);
+            await showAttachment(path, files[0]);
+          } else {
+            poStatus.textContent = response.data?.info?.more_records
+              ? "Choose the purchase order from the first page of attachments."
+              : "Choose the purchase order.";
+          }
+        } catch {
+          poStatus.textContent = "Could not list Sales Order attachments. Check your CRM access.";
+        }
+      })()
+    ]);
+  }
+
+  if (window.ZOHO?.embeddedApp) {
+    ZOHO.embeddedApp.on("PageLoad", loadOrder);
+    ZOHO.embeddedApp.init();
+  } else {
+    orderStatus.textContent = "The Zoho widget SDK did not load.";
+  }
+</script>
