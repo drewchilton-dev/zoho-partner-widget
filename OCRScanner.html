@@ -37,6 +37,8 @@ td+td{border-left:1px solid var(--grey)}
 .crm-differs .field-status{color:#8f1f17}
 .crm-review .field-status{color:var(--bright-navy)}
 .evidence{margin:8px 0 0;font-size:13px}
+.diagnostics{margin-top:12px;padding:10px;border:1px solid var(--grey);border-radius:6px}
+.diagnostics button{margin:8px 0 0;padding:6px 10px;background:var(--navy);color:white;border:0;border-radius:4px;cursor:pointer}
 .review{background:var(--light-green);color:var(--navy);padding:6px 9px;border-left:3px solid var(--dark-green)}
 summary{cursor:pointer;color:var(--bright-navy)}
 pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
@@ -61,6 +63,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
 </div>
 <p id="order-status" role="status">Waiting for Zoho…</p>
 <p id="scan-status" role="status">Waiting for the Sales Order attachment…</p>
+<details class="diagnostics" id="diagnostics" hidden>
+<summary>Scan diagnostics</summary>
+<button id="copy-diagnostics" type="button">Copy diagnostic report</button>
+<span id="diagnostic-status" role="status"></span>
+<pre id="diagnostic-report"></pre>
+</details>
 <div id="results"></div>
 </section>
 </main>
@@ -75,6 +83,38 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   const preview = el("preview");
   let objectUrl, previewId, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
+  const diagnosticVersion = "17";
+  const diagnosticReport = el("diagnostic-report");
+  let trace = [];
+
+  function traceStep(stage, state, code = "") {
+    trace.push({ stage, state, ...(code ? { code } : {}) });
+    diagnosticReport.textContent = JSON.stringify({
+      widgetVersion: diagnosticVersion,
+      functionApiName: "scan_sales_order_po",
+      argumentNames: ["salesOrderId"],
+      steps: trace
+    }, null, 2);
+  }
+
+  function showDiagnostics() {
+    el("diagnostics").hidden = false;
+    el("diagnostics").open = true;
+  }
+
+  el("copy-diagnostics").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(diagnosticReport.textContent);
+      el("diagnostic-status").textContent = " Report copied.";
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(diagnosticReport);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      el("diagnostic-status").textContent = " Press Ctrl+C to copy the selected report.";
+    }
+  });
 
   function paragraph(parent, text, tone = "") {
     const p = document.createElement("p");
@@ -631,10 +671,15 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw Object.assign(new Error("File download failed."), { status: response.status });
       }
       await selectFile(response.data, name, request);
-      if (request === fileRequest) attachmentStatus.textContent = name;
+      if (request === fileRequest) {
+        attachmentStatus.textContent = name;
+        traceStep("CRM attachment preview", "loaded");
+      }
     } catch (error) {
       if (request === fileRequest) {
         previewId = undefined;
+        traceStep("CRM attachment preview", "failed", errorCode(error));
+        showDiagnostics();
         attachmentStatus.textContent = "CRM attachment preview unavailable (" + errorCode(error) + "). The OCR status is shown on the right.";
       }
     }
@@ -648,7 +693,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       if (![200, 204].includes(response.status)) {
         throw Object.assign(new Error(), { status: response.status, details: response.data });
       }
-      return response.data ?? {};
+      return { attachments: response.data ?? {}, route: "CRM REST" };
     } catch (firstError) {
       const api = window.ZOHO?.CRM?.API;
       if (!api?.getRelatedRecords) throw firstError;
@@ -665,14 +710,17 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw firstError;
       }
       if (!Array.isArray(fallback?.data)) throw firstError;
-      return fallback;
+      return { attachments: fallback, route: "CRM related-list SDK", firstFailure: errorCode(firstError) };
     }
   }
 
   async function previewOrderAttachment(orderPath, request, poReference) {
     try {
-      const attachments = await listOrderAttachments(orderPath);
-      if (request !== recordRequest || previewId) return;
+      const { attachments, route, firstFailure } = await listOrderAttachments(orderPath);
+      if (request !== recordRequest) return;
+      if (firstFailure) traceStep("CRM attachment list", "REST failed; SDK fallback used", firstFailure);
+      traceStep("CRM attachment list", route + " returned a response");
+      if (previewId) return;
       const files = (attachments.data ?? []).filter(file =>
         /^\d{10,25}$/.test(String(file.id)) && /\.(pdf|png|jpe?g)$/i.test(file.File_Name ?? ""));
       const exact = poReference ? files.filter(file =>
@@ -681,14 +729,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         ? files.length === 1 ? files[0] : exact.length === 1 ? exact[0] : undefined
         : undefined;
       if (selected) {
+        traceStep("CRM attachment selection", "one eligible file selected");
         void showAttachment(orderPath, String(selected.id), selected.File_Name);
       } else {
+        traceStep("CRM attachment selection", files.length ? "ambiguous or incomplete list" : "no supported files");
         attachmentStatus.textContent = files.length
           ? "Multiple files are possible. Waiting for the scanner to identify the PO."
           : "No supported file was returned by the CRM attachment list.";
       }
     } catch (error) {
       if (request === recordRequest && !previewId) {
+        traceStep("CRM attachment list", "failed", errorCode(error));
+        showDiagnostics();
         attachmentStatus.textContent = "CRM attachment list unavailable (" + errorCode(error) + ").";
       }
     }
@@ -705,7 +757,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       } else if (value && typeof value === "object") {
         const next = value.details?.output ?? value.output ?? value.data ?? value.response;
         if (next == null) {
-          if (value.code) throw new Error("Zoho function error (" + errorCode(value) + ").");
+          if (value.code) throw Object.assign(new Error(), { diagnostic: errorCode(value), zohoCode: value.code });
           break;
         }
         value = next;
@@ -713,19 +765,21 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         break;
       }
     }
-    throw new Error("No readable function output (" + errorCode(response) + "). Check the function API execution settings.");
+    throw Object.assign(new Error(), { diagnostic: errorCode(response) });
   }
 
   async function runScan(orderPath, salesOrderId) {
     const request = ++scanRequest;
     scanStatus.textContent = "Zoho is finding and reading the PO…";
     attachmentStatus.textContent = "Zoho is choosing the attachment…";
+    traceStep("Standalone function", "requested through Zoho widget SDK");
     try {
       const response = await window.ZOHO.CRM.FUNCTIONS.execute("scan_sales_order_po", {
         arguments: JSON.stringify({ salesOrderId })
       });
       if (request !== scanRequest) return;
       const data = functionOutput(response);
+      traceStep("Standalone function", data.ok ? "returned OCR text" : "returned a Deluge error");
       if (String(data?.salesOrderId) === salesOrderId &&
           /^\d{10,25}$/.test(String(data?.attachmentId)) &&
           typeof data?.fileName === "string") {
@@ -734,9 +788,15 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw new Error("Zoho returned an unverified attachment. Confirm the updated standalone code is saved.");
       }
       if (!data?.ok || typeof data.text !== "string") {
-        throw new Error(data?.error || "Zoho OCR did not return text.");
+        const error = new Error(data?.error || "Zoho OCR did not return text.");
+        if (["order_read", "attachment_list", "attachment_selection", "attachment_download", "ocr"].includes(data?.stage)) {
+          traceStep("Deluge stage", data.stage);
+        }
+        if (/^[A-Z][A-Z0-9_]{0,59}$/.test(data?.code ?? "")) traceStep("Deluge API", "returned an error", data.code);
+        throw error;
       }
       result = parseOcr(data.text);
+      traceStep("PO parsing", result.items.length ? "item rows found" : "no item rows found");
       renderResults();
       scanStatus.textContent = "Scan complete. Review differences and any unconfirmed fields.";
     } catch (error) {
@@ -744,9 +804,14 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       if (attachmentStatus.textContent === "Zoho is choosing the attachment…") {
         attachmentStatus.textContent = "Waiting for the CRM attachment preview…";
       }
-      const code = errorCode(error);
-      scanStatus.textContent = "Scan failed. " + (error instanceof Error && !error.code
-        ? error.message : "Zoho function error (" + code + ").");
+      const code = error.diagnostic || errorCode(error);
+      traceStep("Scan", "failed", code);
+      showDiagnostics();
+      const inactive = error.zohoCode === "NOT_ACTIVE" || /\bNOT_ACTIVE\b/.test(code);
+      scanStatus.textContent = inactive
+        ? "Zoho blocked this call before Deluge ran (NOT_ACTIVE). Check that the function is Active and REST API OAuth 2.0 is enabled in this CRM environment."
+        : "Scan failed. " + (error instanceof Error && !error.diagnostic && !error.code
+          ? error.message : "Zoho function error (" + code + ").");
     }
   }
 
@@ -762,15 +827,24 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     const request = ++recordRequest;
     ++fileRequest;
     clearFile();
+    trace = [];
+    el("diagnostics").hidden = true;
+    el("diagnostics").open = false;
+    el("diagnostic-status").textContent = "";
+    traceStep("Widget", "opened");
     order = undefined;
     const native = context?.Entity === "Sales_Orders" ? context.EntityId : undefined;
     const id = context?.salesOrderId ?? context?.data?.salesOrderId ?? (Array.isArray(native) ? native[0] : native);
     if (!/^\d+$/.test(String(id))) {
       orderStatus.textContent = "No Sales Order ID received. Open Review PO from a Sales Order.";
+      traceStep("Sales Order context", "missing or invalid");
+      showDiagnostics();
       return;
     }
     if (typeof zrc === "undefined" || typeof zrc.get !== "function") {
       orderStatus.textContent = "The Zoho Request Client did not load.";
+      traceStep("Zoho Request Client", "unavailable");
+      showDiagnostics();
       return;
     }
     const path = "/crm/v8/Sales_Orders/" + id;
@@ -785,11 +859,16 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
         throw Object.assign(new Error(), { status: response.status, details: response.data });
       }
       orderStatus.textContent = order.Subject || "Current Sales Order";
+      traceStep("Sales Order", "read successfully");
       renderResults();
       void runScan(path, String(id));
       void previewOrderAttachment(path, request, key(order.Purchase_Order));
     } catch (error) {
-      if (request === recordRequest) orderStatus.textContent = "Sales Order read failed (" + errorCode(error) + ").";
+      if (request === recordRequest) {
+        orderStatus.textContent = "Sales Order read failed (" + errorCode(error) + ").";
+        traceStep("Sales Order", "failed", errorCode(error));
+        showDiagnostics();
+      }
     }
   }
 
