@@ -83,7 +83,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
   const preview = el("preview");
   let objectUrl, previewId, order, result;
   let recordRequest = 0, fileRequest = 0, scanRequest = 0;
-  const diagnosticVersion = "19";
+  const diagnosticVersion = "20";
   const diagnosticReport = el("diagnostic-report");
   let trace = [];
 
@@ -441,6 +441,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
     preview.append(open, viewer);
   }
 
+  const learnedPOLayouts = [{"signature":"purchase order|bill to|ship to|ordered by","role":"billing","anchor":"bill to","offset":0,"examples":5},{"signature":"purchase order|ship to|bill to|payment terms","role":"billing","anchor":"bill to","offset":0,"examples":3},{"signature":"supplier|ship to|bill to|payment terms|ship via","role":"billing","anchor":"bill to","offset":0,"examples":3}];
+  const learnedPOHeading = new RegExp("(?:^ *| {3,})(purchase order|bon de commande|vendor|supplier|ordered by|bill to|billing address|invoice to|invoices sent|sold to|ship to|shipping address|delivery address|deliver to|destination address|ship via|payment terms|line item details)(?=\\s{2,}|\\s*:|\\s*$)", "gi");
   function parseOcr(raw) {
     // Keep lines and column spacing. Zoho may return escaped or literal line breaks.
     const text = raw.replace(/\\r\\n|\\n|\\r/g, "\n").replace(/\r\n?/g, "\n")
@@ -548,11 +550,42 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere} label{display:block}
       }
     }
 
+
+    // Keep a unique existing extraction and use corroborated rules to fill gaps.
+    const templateLines = lines.slice(0, 120);
+    const anchors = templateLines.flatMap((line, index) => [...line.matchAll(learnedPOHeading)]
+      .map(match => ({ index, label: match[1].toLowerCase(), end: match.index + match[0].length,
+        left: match.index + match[0].length - match[1].length })));
+    const layoutSignature = [...new Set(anchors.map(item => item.label))].join("|");
+    for (const role of ["billing", "shipping"]) {
+      const existing = [...new Set(evidence[role].filter(entry => entry.address)
+        .map(entry => JSON.stringify(entry.address)))];
+      if (existing.length === 1) continue;
+      const rule = learnedPOLayouts.find(item => item.signature === layoutSignature && item.role === role);
+      if (!rule || anchors.filter(item => item.label === rule.anchor).length !== 1) continue;
+      const index = anchors.findIndex(item => item.label === rule.anchor);
+      const mark = anchors[index];
+      const onRow = anchors.filter(item => item.index === mark.index);
+      const right = onRow.find(item => item.left > mark.left)?.left;
+      const margin = onRow.length > 1 ? Math.max(0, mark.left - 2) : 0;
+      const end = Math.min(anchors.slice(index + 1).find(item => item.index > mark.index)?.index
+        ?? templateLines.length, mark.index + 12);
+      const block = [templateLines[mark.index].slice(mark.end, right).replace(/^[: ]+/, ""),
+        ...templateLines.slice(mark.index + 1, end).map(line => line.slice(margin, right))].filter(value => value.trim())
+        .map(cell).slice(rule.offset);
+      if (!block[1] || !street.test(block[1]) || !block.slice(2, 6).some(value => postal.test(value))) continue;
+      const address = parseAddress(block.slice(0, 6));
+      if (address && (!existing.length || existing.includes(JSON.stringify(address)))) {
+        evidence[role].push({ page: null, label: rule.anchor + " (learned layout)",
+          source_lines: block.slice(0, 6), address, learned: true });
+      }
+    }
+
     const output = { invoice_routing: evidence.invoice_routing, catalog_loaded: false };
     for (const role of ["billing", "shipping"]) {
       const found = [...new Map(evidence[role].filter(entry => entry.address)
         .map(entry => [JSON.stringify(entry.address), entry.address])).values()];
-      output[role] = { address: found.length === 1 ? found[0] : null, evidence: evidence[role] };
+      output[role] = { address: evidence[role].find(entry => entry.learned)?.address ?? (found.length === 1 ? found[0] : null), evidence: evidence[role] };
     }
 
     const decimal = value => value?.replace(/,/g, "") ?? null;
